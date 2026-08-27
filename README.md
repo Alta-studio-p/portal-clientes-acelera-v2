@@ -82,6 +82,26 @@ npm run import:fathom:v2:apply    # aplica cambios
 
 No lo ejecutes salvo que sea necesario; siempre corre primero el dry-run.
 
+### Automatización diaria (GitHub Actions)
+
+`.github/workflows/import-fathom.yml` corre todos los días a las 8:00 PM (hora Colombia/México,
+`01:00 UTC`) y encadena, en orden: import de Fathom → normalización de nombres → enrichment de
+nombres, títulos y rango salarial (todos con `--apply`). También se puede disparar a mano desde
+GitHub → Actions → "Import diario de Fathom" → **Run workflow**.
+
+Para que funcione, agrega estos **Secrets** en GitHub → Settings → Secrets and variables → Actions
+(mismos valores que usaste en Vercel):
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `FATHOM_SOURCE_MARI_API_KEY`, `FATHOM_SOURCE_ROSS_API_KEY`, `FATHOM_SOURCE_ALEX_API_KEY`,
+  `FATHOM_SOURCE_JOTA_API_KEY`
+- `OPENROUTER_API_KEY` (y opcionalmente `OPENROUTER_MODEL`, si no lo defines usa
+  `openai/gpt-4o-mini` por defecto)
+
+Si algún secret falta, el job falla rápido (los scripts validan las variables requeridas al
+arrancar) — revisa la pestaña "Actions" del repo para ver logs de cada corrida.
+
 ## Títulos de llamada con LLM (OpenRouter + gpt-4o-mini)
 
 Fathom a veces deja el título crudo del calendario ("Impromptu Google Meet Meeting") en vez de un

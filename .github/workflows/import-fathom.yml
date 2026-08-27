@@ -1,0 +1,42 @@
+name: Import diario de Fathom
+
+on:
+  schedule:
+    # 20:00 hora Colombia/México (UTC-5) = 01:00 UTC del día siguiente
+    - cron: "0 1 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      FATHOM_SOURCE_MARI_API_KEY: ${{ secrets.FATHOM_SOURCE_MARI_API_KEY }}
+      FATHOM_SOURCE_ROSS_API_KEY: ${{ secrets.FATHOM_SOURCE_ROSS_API_KEY }}
+      FATHOM_SOURCE_ALEX_API_KEY: ${{ secrets.FATHOM_SOURCE_ALEX_API_KEY }}
+      FATHOM_SOURCE_JOTA_API_KEY: ${{ secrets.FATHOM_SOURCE_JOTA_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      OPENROUTER_MODEL: ${{ secrets.OPENROUTER_MODEL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Import de llamadas nuevas (Fathom -> Supabase)
+        run: node scripts/import-fathom-v2.mjs --apply
+
+      - name: Normaliza nombres de cliente (determinístico)
+        run: node scripts/normalize-client-names.mjs --apply
+
+      - name: Enriquece nombres de cliente con LLM
+        run: node scripts/enrich-client-names.mjs --apply
+
+      - name: Enriquece títulos de llamada con LLM
+        run: node scripts/enrich-call-titles.mjs --apply
+
+      - name: Enriquece rango salarial con LLM
+        run: node scripts/enrich-salary-range.mjs --apply
