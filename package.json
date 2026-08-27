@@ -6,9 +6,22 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "import:fathom:v2": "node scripts/import-fathom-v2.mjs",
+    "import:fathom:v2:apply": "node scripts/import-fathom-v2.mjs --apply",
+    "enrich:call-titles": "node scripts/enrich-call-titles.mjs",
+    "enrich:call-titles:apply": "node scripts/enrich-call-titles.mjs --apply",
+    "enrich:client-names": "node scripts/enrich-client-names.mjs",
+    "enrich:client-names:apply": "node scripts/enrich-client-names.mjs --apply",
+    "normalize:client-names": "node scripts/normalize-client-names.mjs",
+    "normalize:client-names:apply": "node scripts/normalize-client-names.mjs --apply",
+    "enrich:salary-range": "node scripts/enrich-salary-range.mjs",
+    "enrich:salary-range:apply": "node scripts/enrich-salary-range.mjs --apply"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.12.5",
+    "@supabase/supabase-js": "^2.112.4",
+    "clsx": "^2.1.1",
     "next": "16.3.3",
     "react": "19.2.8",
     "react-dom": "19.2.8"

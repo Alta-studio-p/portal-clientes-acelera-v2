@@ -1,5 +1,3 @@
-@AGENTS.md
-
 # Portal Clientes Acelera v2 — contexto del proyecto
 
 ## Qué es esto
@@ -17,7 +15,8 @@ Arquitectura de datos: **Fathom + Google Calendar + Google Drive → Supabase �
 El proyecto viejo (Notion + vinext/Cloudflare) vive en una carpeta hermana:
 `/Users/josefonseca/Desktop/Acelera/Acelera/portal-clientes-acelera`. No se debe tocar ni
 reutilizar salvo para referencia visual puntual. Este proyecto (`portal-clientes-acelera-v2`) es
-standalone, construido desde cero con Next.js.
+standalone, construido desde cero con Next.js, en:
+`/Users/josefonseca/Desktop/Acelera/Acelera/portal-clientes-acelera-v2`.
 
 ## Stack
 
@@ -81,9 +80,8 @@ Supabase server-side (respeta RLS con la sesión del usuario logueado, no el ser
 **Ojo con embeds ambiguos de PostgREST**: `clients` tiene tres relaciones distintas con `calls`
 (`client_id`, `first_call_id`, `context_source_call_id`). Cualquier `.select()` que haga embed de
 `calls` desde `clients` DEBE especificar la FK exacta: `calls!calls_client_id_fkey(...)` — si no,
-PostgREST devuelve error 300 (ambiguous embed) y la query falla silenciosamente si el error no se
-loguea. Ya está así en `lib/data/admin.ts` y `lib/data/coach.ts`; mantenerlo si se tocan esas
-queries.
+PostgREST devuelve error 300 (ambiguous embed) y la query falla. Ya está así en
+`lib/data/admin.ts` y `lib/data/coach.ts`; mantenerlo si se tocan esas queries.
 
 ## Componentes clave
 
