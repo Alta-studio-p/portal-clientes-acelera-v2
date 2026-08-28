@@ -90,6 +90,7 @@ export default async function AdminClientsPage({
                 <th className="px-4 py-3">Estado</th>
                 <th className="px-4 py-3">Llamadas</th>
                 <th className="px-4 py-3">Última llamada</th>
+                <th className="px-4 py-3">Drive</th>
                 <th className="px-4 py-3">Contexto</th>
               </tr>
             </thead>
@@ -112,6 +113,13 @@ export default async function AdminClientsPage({
                   </td>
                   <td className="px-4 py-3 text-muted">{client.call_count}</td>
                   <td className="px-4 py-3 text-muted">{formatDate(client.last_call_at)}</td>
+                  <td className="px-4 py-3">
+                    {client.drive_folder_url ? (
+                      <span className="text-xs font-medium text-[--status-active]">Sí</span>
+                    ) : (
+                      <span className="text-xs font-medium text-muted-2">No</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     {client.context_summary ? (
                       <span className="text-xs font-medium text-[--status-active]">Sí</span>
