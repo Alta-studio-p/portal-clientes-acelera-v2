@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import type { ClientDetail } from "@/lib/data/client-detail";
 import { StatusBadge } from "@/components/status-badge";
 import { Card, EmptyState, SectionLabel } from "@/components/ui";
@@ -6,16 +7,19 @@ import { formatDate, formatDateTime, formatDuration } from "@/lib/format";
 import { displayCallTitle } from "@/lib/call-title";
 import { MarkdownLite } from "@/components/markdown-lite";
 import { stripContextIntro } from "@/lib/context-summary";
+import { DriveDocuments } from "@/components/drive-documents";
 
 export function ClientDetailView({
   client,
   selectedCallId,
   callHrefBase,
+  headerActions,
   showNotes = false,
 }: {
   client: ClientDetail;
   selectedCallId?: string;
   callHrefBase: string;
+  headerActions?: ReactNode;
   showNotes?: boolean;
 }) {
   const selectedCall =
@@ -33,7 +37,10 @@ export function ClientDetailView({
             </h1>
             <p className="text-sm text-muted">{client.email}</p>
           </div>
-          <StatusBadge status={client.status} />
+          <div className="flex items-center gap-2">
+            <StatusBadge status={client.status} />
+            {headerActions}
+          </div>
         </div>
 
         <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm">
@@ -247,23 +254,11 @@ export function ClientDetailView({
         </Card>
       )}
 
-      {client.files.length > 0 && (
-        <Card className="p-5">
-          <SectionLabel>Archivos de Drive</SectionLabel>
-          <ul className="divide-y divide-border">
-            {client.files.map((file) => (
-              <li key={file.id} className="flex items-center justify-between py-2.5 text-sm">
-                <span className="text-foreground">{file.name || "Archivo"}</span>
-                {file.url && (
-                  <a href={file.url} target="_blank" rel="noreferrer" className="text-accent hover:underline">
-                    Abrir →
-                  </a>
-                )}
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
+      <DriveDocuments
+        files={client.files}
+        folderId={client.drive_folder_id}
+        folderUrl={client.drive_folder_url}
+      />
     </div>
   );
 }
