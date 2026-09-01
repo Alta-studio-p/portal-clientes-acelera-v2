@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import type { Call, Client, Coach, ClientStatus } from "@/lib/supabase/types";
+import type { CalendarEvent, Call, Client, Coach, ClientStatus } from "@/lib/supabase/types";
 
 export interface AdminCounts {
   clients: number;
@@ -136,4 +136,257 @@ export async function getCallsNeedingAttention(): Promise<Call[]> {
 
   if (error || !data) return [];
   return data as Call[];
+}
+
+export interface AdminCalendarEvent extends CalendarEvent {
+  coach: Pick<Coach, "id" | "full_name" | "email"> | null;
+  client: Pick<Client, "id" | "full_name" | "email" | "status"> | null;
+  matchedCall: Pick<
+    Call,
+    "id" | "client_id" | "coach_id" | "title" | "display_title" | "started_at" | "summary" | "recording_url" | "share_url" | "calendar_event_id"
+  > | null;
+}
+
+export interface AdminUnscheduledCall
+  extends Pick<
+    Call,
+    "id" | "client_id" | "coach_id" | "title" | "display_title" | "started_at" | "summary" | "recording_url" | "share_url" | "calendar_event_id"
+  > {
+  coach: Pick<Coach, "id" | "full_name" | "email"> | null;
+  client: Pick<Client, "id" | "full_name" | "email" | "status"> | null;
+}
+
+export interface AdminCalendarDashboard {
+  events: AdminCalendarEvent[];
+  unscheduledCalls: AdminUnscheduledCall[];
+  coaches: Pick<Coach, "id" | "full_name" | "email">[];
+}
+
+export interface AdminFathomCalendarCall
+  extends Pick<
+    Call,
+    "id" | "client_id" | "coach_id" | "title" | "display_title" | "started_at" | "duration_seconds" | "summary" | "recording_url" | "share_url"
+  > {
+  client: Pick<Client, "id" | "full_name" | "email" | "status"> | null;
+}
+
+export interface AdminFathomCalendarDashboard {
+  coaches: Pick<Coach, "id" | "full_name" | "email">[];
+  selectedCoach: Pick<Coach, "id" | "full_name" | "email"> | null;
+  calls: AdminFathomCalendarCall[];
+}
+
+export async function getAdminFathomCalendarDashboard({
+  from,
+  to,
+  coachId,
+}: {
+  from: string;
+  to: string;
+  coachId?: string;
+}): Promise<AdminFathomCalendarDashboard> {
+  const supabase = await createClient();
+
+  const { data: coachesData } = await supabase
+    .from("coaches")
+    .select("id, full_name, email")
+    .eq("is_active", true)
+    .order("full_name", { ascending: true });
+
+  const coaches = (coachesData ?? []) as Pick<Coach, "id" | "full_name" | "email">[];
+  const selectedCoach = coaches.find((coach) => coach.id === coachId) ?? coaches[0] ?? null;
+
+  if (!selectedCoach) {
+    return { coaches, selectedCoach: null, calls: [] };
+  }
+
+  const { data: callsData } = await supabase
+    .from("calls")
+    .select(
+      "id, client_id, coach_id, title, display_title, started_at, duration_seconds, summary, recording_url, share_url"
+    )
+    .eq("coach_id", selectedCoach.id)
+    .gte("started_at", from)
+    .lt("started_at", to)
+    .order("started_at", { ascending: true });
+
+  const calls = (callsData ?? []) as Pick<
+    Call,
+    "id" | "client_id" | "coach_id" | "title" | "display_title" | "started_at" | "duration_seconds" | "summary" | "recording_url" | "share_url"
+  >[];
+
+  const clientIds = Array.from(
+    new Set(calls.map((call) => call.client_id).filter(Boolean))
+  ) as string[];
+  const { data: clientsData } = clientIds.length
+    ? await supabase
+        .from("clients")
+        .select("id, full_name, email, status")
+        .in("id", clientIds)
+    : { data: [] };
+
+  const clientMap = new Map(
+    ((clientsData ?? []) as Pick<Client, "id" | "full_name" | "email" | "status">[]).map(
+      (client) => [client.id, client]
+    )
+  );
+
+  return {
+    coaches,
+    selectedCoach,
+    calls: calls.map((call) => ({
+      ...call,
+      client: call.client_id ? clientMap.get(call.client_id) ?? null : null,
+    })),
+  };
+}
+
+export async function getAdminCalendarDashboard({
+  from,
+  to,
+  coachId,
+}: {
+  from: string;
+  to: string;
+  coachId?: string;
+}): Promise<AdminCalendarDashboard> {
+  const supabase = await createClient();
+
+  const coachesQuery = supabase
+    .from("coaches")
+    .select("id, full_name, email")
+    .eq("is_active", true)
+    .order("full_name", { ascending: true });
+
+  let eventsQuery = supabase
+    .from("calendar_events")
+    .select("*")
+    .gte("starts_at", from)
+    .lt("starts_at", to)
+    .order("starts_at", { ascending: true });
+
+  let callsQuery = supabase
+    .from("calls")
+    .select(
+      "id, client_id, coach_id, source, fathom_call_id, title, display_title, started_at, duration_seconds, summary, next_steps, recording_url, share_url, calendar_event_id, raw_metadata"
+    )
+    .gte("started_at", from)
+    .lt("started_at", to)
+    .order("started_at", { ascending: true });
+
+  if (coachId) {
+    eventsQuery = eventsQuery.eq("coach_id", coachId);
+    callsQuery = callsQuery.eq("coach_id", coachId);
+  }
+
+  const [{ data: coachesData }, { data: eventsData }, { data: callsData }] = await Promise.all([
+    coachesQuery,
+    eventsQuery,
+    callsQuery,
+  ]);
+
+  const coaches = (coachesData ?? []) as Pick<Coach, "id" | "full_name" | "email">[];
+  const events = (eventsData ?? []) as CalendarEvent[];
+  const calls = (callsData ?? []) as Call[];
+
+  const coachIds = new Set<string>();
+  const clientIds = new Set<string>();
+  const matchedCallIds = new Set<string>();
+
+  for (const event of events) {
+    if (event.coach_id) coachIds.add(event.coach_id);
+    if (event.client_id) clientIds.add(event.client_id);
+    if (event.matched_call_id) matchedCallIds.add(event.matched_call_id);
+  }
+
+  for (const call of calls) {
+    if (call.coach_id) coachIds.add(call.coach_id);
+    if (call.client_id) clientIds.add(call.client_id);
+  }
+
+  const [{ data: relatedCoaches }, { data: relatedClients }, { data: matchedCalls }] =
+    await Promise.all([
+      coachIds.size
+        ? supabase
+            .from("coaches")
+            .select("id, full_name, email")
+            .in("id", Array.from(coachIds))
+        : Promise.resolve({ data: [] }),
+      clientIds.size
+        ? supabase
+            .from("clients")
+            .select("id, full_name, email, status")
+            .in("id", Array.from(clientIds))
+        : Promise.resolve({ data: [] }),
+      matchedCallIds.size
+        ? supabase
+            .from("calls")
+            .select(
+              "id, client_id, coach_id, title, display_title, started_at, summary, recording_url, share_url, calendar_event_id"
+            )
+            .in("id", Array.from(matchedCallIds))
+        : Promise.resolve({ data: [] }),
+    ]);
+
+  const coachMap = new Map(
+    ((relatedCoaches ?? coaches) as Pick<Coach, "id" | "full_name" | "email">[]).map((coach) => [
+      coach.id,
+      coach,
+    ])
+  );
+  for (const coach of coaches) coachMap.set(coach.id, coach);
+
+  const clientMap = new Map(
+    ((relatedClients ?? []) as Pick<Client, "id" | "full_name" | "email" | "status">[]).map(
+      (client) => [client.id, client]
+    )
+  );
+  const matchedCallMap = new Map(
+    ((matchedCalls ?? []) as AdminCalendarEvent["matchedCall"][])
+      .filter((call): call is NonNullable<AdminCalendarEvent["matchedCall"]> => Boolean(call))
+      .map((call) => [call.id, call])
+  );
+
+  const callsByCalendarEvent = new Map<string, Call>();
+  for (const call of calls) {
+    if (call.calendar_event_id) callsByCalendarEvent.set(call.calendar_event_id, call);
+  }
+
+  const mappedEvents = events.map((event) => {
+    const matchedCall =
+      (event.matched_call_id ? matchedCallMap.get(event.matched_call_id) : null) ??
+      (event.id ? callsByCalendarEvent.get(event.id) : null) ??
+      null;
+
+    return {
+      ...event,
+      coach: event.coach_id ? coachMap.get(event.coach_id) ?? null : null,
+      client: event.client_id ? clientMap.get(event.client_id) ?? null : null,
+      matchedCall: matchedCall as AdminCalendarEvent["matchedCall"],
+    };
+  });
+
+  const matchedEventIds = new Set(mappedEvents.map((event) => event.matchedCall?.calendar_event_id).filter(Boolean));
+  const unscheduledCalls = calls
+    .filter((call) => !call.calendar_event_id || !matchedEventIds.has(call.calendar_event_id))
+    .map((call) => ({
+      id: call.id,
+      client_id: call.client_id,
+      coach_id: call.coach_id,
+      title: call.title,
+      display_title: call.display_title,
+      started_at: call.started_at,
+      summary: call.summary,
+      recording_url: call.recording_url,
+      share_url: call.share_url,
+      calendar_event_id: call.calendar_event_id,
+      coach: call.coach_id ? coachMap.get(call.coach_id) ?? null : null,
+      client: call.client_id ? clientMap.get(call.client_id) ?? null : null,
+    }));
+
+  return {
+    events: mappedEvents,
+    unscheduledCalls,
+    coaches,
+  };
 }

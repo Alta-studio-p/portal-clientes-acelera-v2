@@ -16,7 +16,9 @@
     "normalize:client-names": "node scripts/normalize-client-names.mjs",
     "normalize:client-names:apply": "node scripts/normalize-client-names.mjs --apply",
     "enrich:salary-range": "node scripts/enrich-salary-range.mjs",
-    "enrich:salary-range:apply": "node scripts/enrich-salary-range.mjs --apply"
+    "enrich:salary-range:apply": "node scripts/enrich-salary-range.mjs --apply",
+    "translate:es": "node scripts/translate-call-texts-es.mjs",
+    "translate:es:apply": "node scripts/translate-call-texts-es.mjs --apply"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.5",

@@ -1,5 +1,26 @@
 import type { ReactNode } from "react";
 
+const TRANSLATIONS: Record<string, string> = {
+  "meeting purpose": "Propósito de la reunión",
+  "key takeaways": "Puntos clave",
+  "topics discussed": "Temas tratados",
+  "discussion topics": "Temas tratados",
+  "action items": "Próximos pasos",
+  "next steps": "Próximos pasos",
+  "decisions made": "Decisiones tomadas",
+  "important points": "Puntos importantes",
+  "main points": "Puntos principales",
+  "summary": "Resumen",
+  "overview": "Resumen",
+  "follow-up": "Seguimiento",
+  "follow up": "Seguimiento",
+  "client background": "Contexto del cliente",
+  "client context": "Contexto del cliente",
+  "goals": "Objetivos",
+  "challenges": "Retos",
+  "recommendations": "Recomendaciones",
+};
+
 // Fathom summaries always use a small, predictable subset of markdown
 // (## headings, **bold**, [text](url) links, "- " bullets). A full markdown
 // dependency is overkill for that fixed shape, so this renders it directly.
@@ -8,6 +29,23 @@ import type { ReactNode } from "react";
 // moment in the recording — one per line. Turning every line into a link
 // makes the summary unreadable, and the call already has a single "Ver
 // grabación" link, so link syntax here is stripped down to plain text.
+
+function translateLabel(text: string) {
+  const clean = text.replace(/:$/, "").trim();
+  const translated = TRANSLATIONS[clean.toLowerCase()];
+  if (!translated) return text;
+  return text.trim().endsWith(":") ? `${translated}:` : translated;
+}
+
+function normalizeEnglishLabels(text: string) {
+  return text
+    .replace(/^(#{1,6})\s+(.+)$/gm, (_match, marks: string, label: string) => {
+      return `${marks} ${translateLabel(label)}`;
+    })
+    .replace(/\*\*([^*]+)\*\*/g, (_match, label: string) => {
+      return `**${translateLabel(label)}**`;
+    });
+}
 
 function parseInline(text: string, keyPrefix: string): ReactNode[] {
   const nodes: ReactNode[] = [];
@@ -39,7 +77,7 @@ function parseInline(text: string, keyPrefix: string): ReactNode[] {
 }
 
 export function MarkdownLite({ text }: { text: string }) {
-  const lines = text.replace(/\r\n/g, "\n").split("\n");
+  const lines = normalizeEnglishLabels(text).replace(/\r\n/g, "\n").split("\n");
   const blocks: ReactNode[] = [];
   let listBuffer: string[] = [];
   let blockKey = 0;

@@ -9,6 +9,11 @@ import { MarkdownLite } from "@/components/markdown-lite";
 import { stripContextIntro } from "@/lib/context-summary";
 import { DriveDocuments } from "@/components/drive-documents";
 
+const PARTICIPANT_ROLE_LABELS: Record<string, string> = {
+  client: "cliente",
+  internal: "equipo interno",
+};
+
 export function ClientDetailView({
   client,
   selectedCallId,
@@ -183,7 +188,7 @@ export function ClientDetailView({
                         rel="noreferrer"
                         className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-surface-muted"
                       >
-                        Link Fathom
+                        Enlace de Fathom
                       </a>
                     )}
                   </div>
@@ -200,11 +205,11 @@ export function ClientDetailView({
                   </div>
 
                   <div>
-                    <SectionLabel>Next steps</SectionLabel>
+                    <SectionLabel>Próximos pasos</SectionLabel>
                     {selectedCall.next_steps ? (
                       <MarkdownLite text={selectedCall.next_steps} />
                     ) : (
-                      <p className="text-sm text-muted">No se registraron next steps.</p>
+                      <p className="text-sm text-muted">No se registraron próximos pasos.</p>
                     )}
                   </div>
 
@@ -218,7 +223,7 @@ export function ClientDetailView({
                             className="rounded-full bg-surface-muted px-2.5 py-1 text-xs text-muted"
                           >
                             {p.name || p.email}
-                            {p.role_hint ? ` · ${p.role_hint}` : ""}
+                            {p.role_hint ? ` · ${PARTICIPANT_ROLE_LABELS[p.role_hint] ?? p.role_hint}` : ""}
                           </li>
                         ))}
                       </ul>

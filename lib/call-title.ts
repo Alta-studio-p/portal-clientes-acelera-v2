@@ -1,7 +1,7 @@
 const GENERIC_TITLE_PATTERN = /^(impromptu|untitled|meeting|google meet|zoom meeting)/i;
 
 const PURPOSE_HEADING_PATTERN =
-  /##\s*(?:meeting purpose|prop[oó]sito de la reuni[oó]n)\s*\n+\s*\[([^\]]+)\]/i;
+  /##\s*(?:meeting purpose|session purpose|call purpose|prop[oó]sito de la reuni[oó]n|prop[oó]sito de la llamada)\s*\n+\s*(?:\[([^\]]+)\]|(.+))/i;
 
 /**
  * Fathom sometimes leaves the raw calendar title ("Impromptu Google Meet
@@ -22,8 +22,9 @@ export function displayCallTitle(call: {
 
   if (looksGeneric && call.summary) {
     const match = call.summary.match(PURPOSE_HEADING_PATTERN);
-    if (match?.[1]) {
-      return match[1].replace(/\.$/, "").trim();
+    const summaryTitle = match?.[1] || match?.[2];
+    if (summaryTitle) {
+      return summaryTitle.replace(/\.$/, "").trim();
     }
   }
 

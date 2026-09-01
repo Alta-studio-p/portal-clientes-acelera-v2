@@ -4,6 +4,7 @@ import { AppShell } from "@/components/app-shell";
 
 const NAV_ITEMS = [
   { href: "/admin", label: "Resumen" },
+  { href: "/admin/calendar", label: "Calendario" },
   { href: "/admin/clients", label: "Clientes" },
   { href: "/admin/coaches", label: "Coaches" },
 ];
