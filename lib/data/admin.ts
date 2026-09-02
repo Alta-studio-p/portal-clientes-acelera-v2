@@ -48,7 +48,7 @@ export async function getClientsList(filters: {
   let query = supabase
     .from("clients")
     .select(
-      `id, profile_id, email, full_name, status, drive_folder_url, drive_folder_id, first_call_id, context_summary, context_source_call_id, context_generated_at, notes,
+      `id, profile_id, email, full_name, status, drive_folder_url, drive_folder_id, first_call_id, context_summary, context_source_call_id, context_generated_at, notes, start_date, end_date,
        coach_client_assignments ( coach_id, is_primary, coaches ( id, full_name, email ) ),
        calls!calls_client_id_fkey ( id, started_at )`
     )
@@ -94,7 +94,14 @@ export async function getClientsList(filters: {
 }
 
 export interface CoachWithClients extends Coach {
-  clients: { id: string; full_name: string | null; email: string; status: ClientStatus; is_primary: boolean }[];
+  clients: {
+    id: string;
+    full_name: string | null;
+    email: string;
+    status: ClientStatus;
+    end_date: string | null;
+    is_primary: boolean;
+  }[];
 }
 
 export async function getCoachesWithClients(): Promise<CoachWithClients[]> {
@@ -104,14 +111,17 @@ export async function getCoachesWithClients(): Promise<CoachWithClients[]> {
     .from("coaches")
     .select(
       `id, profile_id, email, full_name, fathom_source_key, calendar_source_key, is_active,
-       coach_client_assignments ( is_primary, clients ( id, full_name, email, status ) )`
+       coach_client_assignments ( is_primary, clients ( id, full_name, email, status, end_date ) )`
     )
     .order("full_name", { ascending: true });
 
   if (error || !data) return [];
 
   type Row = Coach & {
-    coach_client_assignments: { is_primary: boolean; clients: { id: string; full_name: string | null; email: string; status: ClientStatus } | null }[];
+    coach_client_assignments: {
+      is_primary: boolean;
+      clients: { id: string; full_name: string | null; email: string; status: ClientStatus; end_date: string | null } | null;
+    }[];
   };
 
   return (data as unknown as Row[]).map((row) => ({

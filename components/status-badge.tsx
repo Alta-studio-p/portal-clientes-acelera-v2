@@ -2,7 +2,7 @@ import type { ClientStatus } from "@/lib/supabase/types";
 
 const LABELS: Record<ClientStatus, string> = {
   active: "Activo",
-  inactive: "Inactivo",
+  inactive: "Finalizado",
   extension: "Extensión",
 };
 

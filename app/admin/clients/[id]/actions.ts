@@ -89,6 +89,46 @@ export async function removeClientDriveFolder(formData: FormData) {
   redirect(clientPath(clientId, { drive: "removed" }));
 }
 
+export interface UpdateDatesState {
+  error: string | null;
+  success: boolean;
+}
+
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+// Fechas del programa: nunca tocan `status`. El estado del cliente solo lo
+// cambia una persona a mano, sin importar si la fecha final ya pasó.
+export async function updateClientDates(
+  _prevState: UpdateDatesState,
+  formData: FormData
+): Promise<UpdateDatesState> {
+  await requireRole(["admin"]);
+
+  const clientId = String(formData.get("clientId") ?? "");
+  const startDateRaw = String(formData.get("start_date") ?? "").trim();
+  const endDateRaw = String(formData.get("end_date") ?? "").trim();
+
+  if (!clientId) return { error: "Cliente inválido.", success: false };
+  if (startDateRaw && !DATE_PATTERN.test(startDateRaw)) {
+    return { error: "Fecha de inicio inválida.", success: false };
+  }
+  if (endDateRaw && !DATE_PATTERN.test(endDateRaw)) {
+    return { error: "Fecha final inválida.", success: false };
+  }
+
+  const supabase = await createAdminClient();
+  const { error } = await supabase
+    .from("clients")
+    .update({ start_date: startDateRaw || null, end_date: endDateRaw || null })
+    .eq("id", clientId);
+
+  if (error) return { error: "No se pudieron guardar las fechas.", success: false };
+
+  revalidatePath(clientPath(clientId));
+  revalidatePath("/admin/clients");
+  return { error: null, success: true };
+}
+
 export async function updateClientStatus(formData: FormData) {
   await requireRole(["admin"]);
 

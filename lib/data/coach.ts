@@ -6,6 +6,8 @@ export interface CoachClientRow {
   full_name: string | null;
   email: string;
   status: ClientStatus;
+  start_date: string | null;
+  end_date: string | null;
   is_primary: boolean;
   call_count: number;
   last_call_at: string | null;
@@ -17,7 +19,7 @@ export async function getClientsForCoach(coachId: string): Promise<CoachClientRo
   const { data, error } = await supabase
     .from("coach_client_assignments")
     .select(
-      "is_primary, clients ( id, full_name, email, status, calls!calls_client_id_fkey ( id, started_at ) )"
+      "is_primary, clients ( id, full_name, email, status, start_date, end_date, calls!calls_client_id_fkey ( id, started_at ) )"
     )
     .eq("coach_id", coachId);
 
@@ -30,6 +32,8 @@ export async function getClientsForCoach(coachId: string): Promise<CoachClientRo
       full_name: string | null;
       email: string;
       status: ClientStatus;
+      start_date: string | null;
+      end_date: string | null;
       calls: { id: string; started_at: string | null }[];
     } | null;
   };
@@ -47,6 +51,8 @@ export async function getClientsForCoach(coachId: string): Promise<CoachClientRo
         full_name: r.clients!.full_name,
         email: r.clients!.email,
         status: r.clients!.status,
+        start_date: r.clients!.start_date,
+        end_date: r.clients!.end_date,
         is_primary: r.is_primary,
         call_count: calls.length,
         last_call_at: lastCall?.started_at ?? null,

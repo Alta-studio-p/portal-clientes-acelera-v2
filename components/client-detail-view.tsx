@@ -2,9 +2,11 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import type { ClientDetail } from "@/lib/data/client-detail";
 import { StatusBadge } from "@/components/status-badge";
+import { ProgramAlertBadge } from "@/components/program-alert-badge";
 import { Card, EmptyState, SectionLabel } from "@/components/ui";
 import { formatDate, formatDateTime, formatDuration } from "@/lib/format";
 import { displayCallTitle } from "@/lib/call-title";
+import { getProgramAlert } from "@/lib/program-dates";
 import { MarkdownLite } from "@/components/markdown-lite";
 import { stripContextIntro } from "@/lib/context-summary";
 import { DriveDocuments } from "@/components/drive-documents";
@@ -31,10 +33,11 @@ export function ClientDetailView({
     client.calls.find((c) => c.id === selectedCallId) ?? client.calls[0] ?? null;
 
   const firstCall = client.calls.find((c) => c.id === client.context_source_call_id);
+  const alert = getProgramAlert(client);
 
   return (
     <div className="space-y-6">
-      <Card className="p-5">
+      <Card className={`p-5 ${alert ? "border-l-4 border-l-[--alert-warning]" : ""}`}>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="text-lg font-semibold text-foreground">
@@ -44,6 +47,7 @@ export function ClientDetailView({
           </div>
           <div className="flex items-center gap-2">
             <StatusBadge status={client.status} />
+            <ProgramAlertBadge status={client.status} end_date={client.end_date} />
             {headerActions}
           </div>
         </div>
@@ -59,6 +63,17 @@ export function ClientDetailView({
                 : "Sin asignar"}
             </span>
           </div>
+          {(client.start_date || client.end_date) && (
+            <div>
+              <span className="text-muted-2">Programa: </span>
+              <span className="text-foreground">
+                {client.start_date ? formatDate(client.start_date) : "—"} →{" "}
+                <span className={alert ? "font-medium text-[--alert-warning]" : ""}>
+                  {client.end_date ? formatDate(client.end_date) : "—"}
+                </span>
+              </span>
+            </div>
+          )}
           {client.drive_folder_url && (
             <a
               href={client.drive_folder_url}

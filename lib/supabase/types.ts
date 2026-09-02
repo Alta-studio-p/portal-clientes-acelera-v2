@@ -32,6 +32,8 @@ export interface Client {
   context_generated_at: string | null;
   notes: string | null;
   desired_salary_range: string | null;
+  start_date: string | null;
+  end_date: string | null;
 }
 
 export interface CoachClientAssignment {

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getCoachesWithClients } from "@/lib/data/admin";
 import { PageHeader, Card, EmptyState, SectionLabel } from "@/components/ui";
 import { StatusBadge } from "@/components/status-badge";
+import { ProgramAlertBadge } from "@/components/program-alert-badge";
 
 export default async function AdminCoachesPage() {
   const coaches = await getCoachesWithClients();
@@ -36,21 +37,37 @@ export default async function AdminCoachesPage() {
               </div>
 
               {coach.clients.length > 0 && (
-                <div className="mt-4">
-                  <SectionLabel>Clientes asignados</SectionLabel>
-                  <ul className="divide-y divide-border">
-                    {coach.clients.map((client) => (
-                      <li key={client.id} className="flex items-center justify-between py-2 text-sm">
-                        <Link
-                          href={`/admin/clients/${client.id}`}
-                          className="font-medium text-foreground hover:text-accent"
-                        >
-                          {client.full_name || client.email}
-                        </Link>
-                        <StatusBadge status={client.status} />
-                      </li>
-                    ))}
-                  </ul>
+                <div className="mt-4 space-y-4">
+                  {(
+                    [
+                      ["Clientes activos", coach.clients.filter((c) => c.status !== "inactive")],
+                      ["Clientes finalizados", coach.clients.filter((c) => c.status === "inactive")],
+                    ] as const
+                  ).map(([label, list]) =>
+                    list.length > 0 ? (
+                      <div key={label}>
+                        <SectionLabel>
+                          {label} ({list.length})
+                        </SectionLabel>
+                        <ul className="divide-y divide-border">
+                          {list.map((client) => (
+                            <li key={client.id} className="flex items-center justify-between py-2 text-sm">
+                              <Link
+                                href={`/admin/clients/${client.id}`}
+                                className="font-medium text-foreground hover:text-accent"
+                              >
+                                {client.full_name || client.email}
+                              </Link>
+                              <span className="flex items-center gap-2">
+                                <ProgramAlertBadge status={client.status} end_date={client.end_date} />
+                                <StatusBadge status={client.status} />
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null
+                  )}
                 </div>
               )}
             </Card>

@@ -22,6 +22,9 @@
 
   --danger: #b3261e;
   --danger-bg: #fbeceb;
+
+  --alert-warning: #d68552;
+  --alert-warning-bg: #faece1;
 }
 
 @theme inline {

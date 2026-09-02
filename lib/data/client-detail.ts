@@ -14,7 +14,7 @@ export async function getClientDetail(clientId: string): Promise<ClientDetail | 
   const { data: client, error } = await supabase
     .from("clients")
     .select(
-      `id, profile_id, email, full_name, status, drive_folder_url, drive_folder_id, first_call_id, context_summary, context_source_call_id, context_generated_at, notes, desired_salary_range,
+      `id, profile_id, email, full_name, status, drive_folder_url, drive_folder_id, first_call_id, context_summary, context_source_call_id, context_generated_at, notes, desired_salary_range, start_date, end_date,
        coach_client_assignments ( is_primary, coaches ( id, full_name, email ) )`
     )
     .eq("id", clientId)
@@ -88,7 +88,7 @@ export async function getClientByProfileId(profileId: string): Promise<Client | 
   const { data } = await supabase
     .from("clients")
     .select(
-      "id, profile_id, email, full_name, status, drive_folder_url, drive_folder_id, first_call_id, context_summary, context_source_call_id, context_generated_at, notes"
+      "id, profile_id, email, full_name, status, drive_folder_url, drive_folder_id, first_call_id, context_summary, context_source_call_id, context_generated_at, notes, start_date, end_date"
     )
     .eq("profile_id", profileId)
     .maybeSingle();

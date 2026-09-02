@@ -2,13 +2,15 @@ import Link from "next/link";
 import { getClientsList, getCoachesWithClients } from "@/lib/data/admin";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
 import { StatusBadge } from "@/components/status-badge";
+import { ProgramAlertBadge } from "@/components/program-alert-badge";
 import { formatDate } from "@/lib/format";
+import { getProgramAlert } from "@/lib/program-dates";
 import { AddClientForm } from "./add-client-form";
 import type { ClientStatus } from "@/lib/supabase/types";
 
 const STATUS_OPTIONS: { value: ClientStatus; label: string }[] = [
   { value: "active", label: "Activo" },
-  { value: "inactive", label: "Inactivo" },
+  { value: "inactive", label: "Finalizado" },
   { value: "extension", label: "Extensión" },
 ];
 
@@ -93,6 +95,7 @@ export default async function AdminClientsPage({
                 <th className="px-4 py-3">Cliente</th>
                 <th className="px-4 py-3">Coach(es)</th>
                 <th className="px-4 py-3">Estado</th>
+                <th className="px-4 py-3">Fecha final</th>
                 <th className="px-4 py-3">Llamadas</th>
                 <th className="px-4 py-3">Última llamada</th>
                 <th className="px-4 py-3">Drive</th>
@@ -100,8 +103,13 @@ export default async function AdminClientsPage({
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {clients.map((client) => (
-                <tr key={client.id} className="hover:bg-surface-muted">
+              {clients.map((client) => {
+                const alert = getProgramAlert(client);
+                return (
+                <tr
+                  key={client.id}
+                  className={`hover:bg-surface-muted ${alert ? "border-l-4 border-l-[--alert-warning]" : ""}`}
+                >
                   <td className="px-4 py-3">
                     <Link href={`/admin/clients/${client.id}`} className="block">
                       <p className="font-medium text-foreground">
@@ -115,6 +123,12 @@ export default async function AdminClientsPage({
                   </td>
                   <td className="px-4 py-3">
                     <StatusBadge status={client.status} />
+                  </td>
+                  <td className="px-4 py-3">
+                    <p className={alert ? "font-medium text-[--alert-warning]" : "text-muted"}>
+                      {client.end_date ? formatDate(client.end_date) : "—"}
+                    </p>
+                    <ProgramAlertBadge status={client.status} end_date={client.end_date} />
                   </td>
                   <td className="px-4 py-3 text-muted">{client.call_count}</td>
                   <td className="px-4 py-3 text-muted">{formatDate(client.last_call_at)}</td>
@@ -133,7 +147,8 @@ export default async function AdminClientsPage({
                     )}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </Card>
