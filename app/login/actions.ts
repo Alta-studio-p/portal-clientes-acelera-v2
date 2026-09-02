@@ -6,23 +6,36 @@ import { roleHome } from "@/lib/auth";
 
 export type LoginState = { error: string | null };
 
+const DEFAULT_LOGIN_DOMAIN = "joinaceleratalent.com";
+
+// Los accesos son por usuario simple ("alex", "admin"), sin arroba. Por
+// debajo Supabase Auth sigue identificando cuentas por email, así que un
+// usuario sin "@" se completa con el dominio por defecto. Si el usuario ya
+// escribe un correo completo (cuentas viejas como outlook.com) se respeta tal
+// cual, para no romper accesos existentes.
+function resolveLoginEmail(usernameOrEmail: string): string {
+  if (usernameOrEmail.includes("@")) return usernameOrEmail;
+  return `${usernameOrEmail.toLowerCase()}@${DEFAULT_LOGIN_DOMAIN}`;
+}
+
 export async function loginAction(
   _prevState: LoginState,
   formData: FormData
 ): Promise<LoginState> {
-  const email = String(formData.get("email") ?? "").trim();
+  const username = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
   const redirectTo = String(formData.get("redirectTo") ?? "");
 
-  if (!email || !password) {
-    return { error: "Ingresa tu correo y contraseña." };
+  if (!username || !password) {
+    return { error: "Ingresa tu usuario y contraseña." };
   }
 
+  const email = resolveLoginEmail(username);
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error || !data.user) {
-    return { error: "Correo o contraseña incorrectos." };
+    return { error: "Usuario o contraseña incorrectos." };
   }
 
   const { data: profile } = await supabase

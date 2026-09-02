@@ -14,16 +14,16 @@ export function LoginForm({ redirectTo }: { redirectTo?: string }) {
 
       <div>
         <label htmlFor="email" className="mb-1.5 block text-xs font-medium text-muted">
-          Correo
+          Usuario
         </label>
         <input
           id="email"
           name="email"
-          type="email"
+          type="text"
           required
-          autoComplete="email"
+          autoComplete="username"
           className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-          placeholder="tu@correo.com"
+          placeholder="tu usuario"
         />
       </div>
 

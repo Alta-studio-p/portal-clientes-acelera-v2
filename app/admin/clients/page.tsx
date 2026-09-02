@@ -3,6 +3,7 @@ import { getClientsList, getCoachesWithClients } from "@/lib/data/admin";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
 import { StatusBadge } from "@/components/status-badge";
 import { formatDate } from "@/lib/format";
+import { AddClientForm } from "./add-client-form";
 import type { ClientStatus } from "@/lib/supabase/types";
 
 const STATUS_OPTIONS: { value: ClientStatus; label: string }[] = [
@@ -28,7 +29,11 @@ export default async function AdminClientsPage({
 
   return (
     <div>
-      <PageHeader title="Clientes" description={`${clients.length} clientes`} />
+      <PageHeader
+        title="Clientes"
+        description={`${clients.length} clientes`}
+        actions={<AddClientForm coaches={coaches} />}
+      />
 
       <form className="mb-5 flex flex-wrap gap-3" action="/admin/clients">
         <input
