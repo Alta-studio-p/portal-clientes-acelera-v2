@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth";
 import { getClientDetail, getCoachByProfileId } from "@/lib/data/client-detail";
 import { ClientDetailView } from "@/components/client-detail-view";
+import { ClientDatesSettings } from "@/components/client-dates-settings";
 
 export default async function CoachClientDetailPage({
   params,
@@ -22,6 +23,13 @@ export default async function CoachClientDetailPage({
   if (!isAssigned) notFound();
 
   return (
-    <ClientDetailView client={client} selectedCallId={call} callHrefBase={`/coach/clients/${id}`} />
+    <ClientDetailView
+      client={client}
+      selectedCallId={call}
+      callHrefBase={`/coach/clients/${id}`}
+      headerActions={
+        <ClientDatesSettings clientId={client.id} startDate={client.start_date} endDate={client.end_date} />
+      }
+    />
   );
 }

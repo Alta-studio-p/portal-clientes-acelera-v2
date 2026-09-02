@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { addThreeMonthsSameDay } from "@/lib/program-dates";
-import { updateClientDates, type UpdateDatesState } from "./actions";
+import { updateClientDates, type UpdateDatesState } from "@/lib/actions/client-dates";
 
 const initialState: UpdateDatesState = { error: null, success: false };
 
@@ -29,7 +29,7 @@ export function ClientDatesForm({
   }
 
   return (
-    <form action={formAction} className="mt-4 border-t border-border pt-4">
+    <form action={formAction}>
       <input type="hidden" name="clientId" value={clientId} />
       <p className="text-xs font-medium text-muted-2">Fechas del programa</p>
       <div className="mt-1.5 grid grid-cols-2 gap-2">

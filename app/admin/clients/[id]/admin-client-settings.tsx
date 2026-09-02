@@ -1,7 +1,7 @@
 import type { ClientDetail } from "@/lib/data/client-detail";
 import type { ClientStatus } from "@/lib/supabase/types";
 import { removeClientDriveFolder, saveClientDriveFolder, updateClientStatus } from "./actions";
-import { ClientDatesForm } from "./client-dates-form";
+import { ClientDatesForm } from "@/components/client-dates-form";
 
 const STATUS_OPTIONS: { value: ClientStatus; label: string }[] = [
   { value: "active", label: "Activo" },
@@ -78,7 +78,9 @@ export function AdminClientSettings({
           </div>
         </form>
 
-        <ClientDatesForm clientId={client.id} startDate={client.start_date} endDate={client.end_date} />
+        <div className="mt-4 border-t border-border pt-4">
+          <ClientDatesForm clientId={client.id} startDate={client.start_date} endDate={client.end_date} />
+        </div>
 
         <form action={saveClientDriveFolder} className="mt-4">
           <input type="hidden" name="clientId" value={client.id} />
