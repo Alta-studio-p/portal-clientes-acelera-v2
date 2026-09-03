@@ -18,9 +18,8 @@ export default async function LoginPage({
     <div className="flex flex-1 items-center justify-center px-4 py-16">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-accent text-sm font-semibold text-white">
-            A
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-icon.png" alt="Acelera Talent" className="mx-auto mb-4 h-10 w-10 object-contain" />
           <h1 className="text-lg font-semibold text-foreground">Portal Clientes Acelera</h1>
           <p className="mt-1 text-sm text-muted">Acceso privado de coaching</p>
         </div>

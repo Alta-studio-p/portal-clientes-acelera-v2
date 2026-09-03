@@ -23,9 +23,8 @@ export function AppShell({
     <div className="flex min-h-screen w-full flex-1">
       <aside className="hidden w-60 shrink-0 flex-col border-r border-border bg-surface md:flex">
         <div className="flex items-center gap-2 border-b border-border px-5 py-4">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-sm font-semibold text-white">
-            A
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-icon.png" alt="Acelera Talent" className="h-8 w-8 object-contain" />
           <div className="leading-tight">
             <p className="text-sm font-semibold text-foreground">Acelera</p>
             <p className="text-[11px] text-muted-2">{roleLabel}</p>
@@ -63,9 +62,8 @@ export function AppShell({
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-border bg-surface px-4 py-3 md:hidden">
           <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent text-xs font-semibold text-white">
-              A
-            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-icon.png" alt="Acelera Talent" className="h-7 w-7 object-contain" />
             <span className="text-sm font-semibold text-foreground">Acelera · {roleLabel}</span>
           </div>
           <form action="/logout" method="post">
