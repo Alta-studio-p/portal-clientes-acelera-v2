@@ -18,6 +18,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
       roleLabel="Admin"
       userName={profile.full_name || email}
       userEmail={email}
+      searchAction="/admin/clients"
     >
       {children}
     </AppShell>

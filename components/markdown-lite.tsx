@@ -47,7 +47,7 @@ function normalizeEnglishLabels(text: string) {
     });
 }
 
-function parseInline(text: string, keyPrefix: string): ReactNode[] {
+export function parseInline(text: string, keyPrefix: string): ReactNode[] {
   const nodes: ReactNode[] = [];
   const pattern = /\[([^\]]+)\]\(([^)]+)\)|\*\*([^*]+)\*\*/g;
   let lastIndex = 0;

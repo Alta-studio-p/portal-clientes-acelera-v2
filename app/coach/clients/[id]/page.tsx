@@ -27,6 +27,7 @@ export default async function CoachClientDetailPage({
       client={client}
       selectedCallId={call}
       callHrefBase={`/coach/clients/${id}`}
+      backHref="/coach"
       headerActions={
         <ClientDatesSettings clientId={client.id} startDate={client.start_date} endDate={client.end_date} />
       }

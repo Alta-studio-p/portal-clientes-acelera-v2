@@ -5,6 +5,20 @@ export function formatDate(value: string | null): string {
   return date.toLocaleDateString("es-MX", { year: "numeric", month: "short", day: "numeric" });
 }
 
+export function formatShortDate(value: string | null): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString("es-MX", { day: "numeric", month: "short" }).replace(".", "").toUpperCase();
+}
+
+export function formatTime(value: string | null): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
+}
+
 export function formatDateTime(value: string | null): string {
   if (!value) return "—";
   const date = new Date(value);

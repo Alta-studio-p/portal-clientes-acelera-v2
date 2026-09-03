@@ -18,6 +18,7 @@ export default async function CoachLayout({ children }: { children: ReactNode })
       roleLabel="Coach"
       userName={profile.full_name || email}
       userEmail={email}
+      searchAction="/coach"
     >
       {children}
     </AppShell>

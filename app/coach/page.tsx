@@ -55,23 +55,40 @@ function ClientsTable({ clients }: { clients: CoachClientRow[] }) {
   );
 }
 
-export default async function CoachHomePage() {
+export default async function CoachHomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>;
+}) {
   const { userId } = await requireRole(["coach"]);
+  const { q } = await searchParams;
   const coach = await getCoachByProfileId(userId);
-  const clients = coach ? await getClientsForCoach(coach.id) : [];
+  const allClients = coach ? await getClientsForCoach(coach.id) : [];
+
+  const query = q?.trim().toLowerCase();
+  const clients = query
+    ? allClients.filter(
+        (c) => c.full_name?.toLowerCase().includes(query) || c.email.toLowerCase().includes(query)
+      )
+    : allClients;
 
   const activeClients = clients.filter((c) => c.status !== "inactive");
   const closedClients = clients.filter((c) => c.status === "inactive");
 
   return (
     <div>
-      <PageHeader title="Mis clientes" description={`${clients.length} clientes asignados`} />
+      <PageHeader
+        title="Mis clientes"
+        description={query ? `${clients.length} resultados para "${q}"` : `${clients.length} clientes asignados`}
+      />
 
-      {clients.length === 0 ? (
+      {allClients.length === 0 ? (
         <EmptyState
           title="Sin clientes asignados"
           description="Cuando Acelera te asigne clientes, aparecerán aquí."
         />
+      ) : clients.length === 0 ? (
+        <EmptyState title="Sin resultados" description="Ajusta tu búsqueda." />
       ) : (
         <div className="space-y-6">
           <div>
