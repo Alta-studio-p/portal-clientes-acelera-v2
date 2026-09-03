@@ -5,6 +5,14 @@ const MAX_PAGES = Number(process.env.FATHOM_MAX_PAGES || 200);
 const SOURCE_DELAY_MS = Number(process.env.FATHOM_SOURCE_DELAY_MS || 1200);
 const INTERNAL_DOMAIN = "joinaceleratalent.com";
 
+// fathom.video: la propia cuenta de Fathom aparece como invitado en llamadas
+// demo internas ("Fathom Demo", 2021) presentes en el historial de las
+// cuentas de origen. No son clientes ni coaches — sin este filtro, cada
+// corrida del import las vuelve a crear como cliente fantasma aunque se
+// borren a mano (ver "Susannah Durant").
+const EXCLUDED_EMAIL_DOMAINS = ["fathom.video"];
+const DEMO_TITLE_PATTERN = /^fathom demo$/i;
+
 loadEnv(".env.local");
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -107,7 +115,12 @@ function externalInvitees(meeting) {
       name: cleanText(invitee.name),
       domain: cleanText(invitee.email_domain || String(invitee.email || "").split("@")[1]).toLowerCase(),
     }))
-    .filter((invitee) => invitee.email && invitee.domain !== INTERNAL_DOMAIN);
+    .filter(
+      (invitee) =>
+        invitee.email &&
+        invitee.domain !== INTERNAL_DOMAIN &&
+        !EXCLUDED_EMAIL_DOMAINS.includes(invitee.domain)
+    );
 }
 
 function primaryClientCandidate(meeting) {
@@ -234,6 +247,7 @@ async function upsertParticipants(callId, meeting) {
   if (!APPLY || !callId) return;
   const invitees = Array.isArray(meeting.calendar_invitees) ? meeting.calendar_invitees : [];
   const participants = invitees
+    .filter((invitee) => !EXCLUDED_EMAIL_DOMAINS.includes(String(invitee.email || "").split("@")[1]?.toLowerCase()))
     .map((invitee) => ({
       call_id: callId,
       email: normalizeEmail(invitee.email),
@@ -312,6 +326,12 @@ async function main() {
     stats.meetings += meetings.length;
 
     for (const meeting of meetings) {
+      const rawTitle = cleanText(meeting.meeting_title || meeting.title);
+      if (DEMO_TITLE_PATTERN.test(rawTitle)) {
+        stats.meetings -= 1; // no cuenta como reunion real importada/omitida
+        continue;
+      }
+
       const candidate = primaryClientCandidate(meeting);
       const client = candidate ? await upsertClient(candidate) : null;
       if (client?.id) stats.withClient += 1;
