@@ -3,20 +3,19 @@ import type { ClientDetail } from "@/lib/data/client-detail";
 import { Card, SectionLabel } from "@/components/ui";
 import { ClientHeader } from "@/components/client-detail/client-header";
 import { ProfileStrip } from "@/components/client-detail/profile-strip";
-import { CallCarousel, type CallCardData } from "@/components/client-detail/call-carousel";
+import { CallListPanel, type CallCardData } from "@/components/client-detail/call-list-panel";
+import { MobileCallDrawer } from "@/components/client-detail/mobile-call-drawer";
 import { CallReader } from "@/components/client-detail/call-reader";
 import { DriveDocuments } from "@/components/drive-documents";
 import { displayCallTitle } from "@/lib/call-title";
 import { formatDateTime } from "@/lib/format";
 import { parseSummaryMarkdown } from "@/lib/call-summary";
 
-function monthLabel(dateStr: string | null): { key: string; label: string } | null {
-  if (!dateStr) return null;
-  const date = new Date(dateStr);
-  if (Number.isNaN(date.getTime())) return null;
-  const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-  const label = date.toLocaleDateString("es-MX", { month: "long", year: "numeric" });
-  return { key, label: label.charAt(0).toUpperCase() + label.slice(1) };
+function stripMarkup(text: string): string {
+  return text
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .trim();
 }
 
 export function ClientDetailView({
@@ -36,7 +35,7 @@ export function ClientDetailView({
 }) {
   // client.calls viene ordenado started_at desc (más reciente primero). La
   // posición de sesión se numera cronológicamente ascendente (1 = la más
-  // antigua), igual que "Sesión X de N" en la referencia visual.
+  // antigua).
   const total = client.calls.length;
   const selectedIndex = selectedCallId
     ? client.calls.findIndex((c) => c.id === selectedCallId)
@@ -52,10 +51,14 @@ export function ClientDetailView({
   const prevHref = prevCall ? `${callHrefBase}?call=${prevCall.id}` : null;
   const nextHref = nextCall ? `${callHrefBase}?call=${nextCall.id}` : null;
 
-  const carouselCalls: CallCardData[] = client.calls.map((call) => {
+  const listCalls: CallCardData[] = client.calls.map((call) => {
     const parsed = parseSummaryMarkdown(call.summary);
     const title = displayCallTitle(call);
-    const month = monthLabel(call.started_at);
+    const preview = parsed?.oneLiner
+      ? stripMarkup(parsed.oneLiner)
+      : parsed?.highlights[0]
+        ? stripMarkup(parsed.highlights[0])
+        : null;
     const searchText = [title, parsed?.oneLiner, ...(parsed?.highlights ?? []), ...(parsed?.topics ?? [])]
       .filter(Boolean)
       .join(" ")
@@ -66,10 +69,8 @@ export function ClientDetailView({
       title,
       startedAt: call.started_at,
       durationSeconds: call.duration_seconds,
+      preview,
       searchText,
-      topics: parsed?.topics ?? [],
-      monthKey: month?.key ?? null,
-      monthLabel: month?.label ?? null,
     };
   });
 
@@ -85,23 +86,23 @@ export function ClientDetailView({
         </p>
       )}
 
-      <div className="mb-6">
-        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-base font-semibold text-foreground">Historial de llamadas</h2>
-          <span className="text-sm text-muted-2">{total} sesiones</span>
-        </div>
-        <CallCarousel calls={carouselCalls} selectedCallId={selectedCall?.id ?? null} hrefBase={callHrefBase} />
-      </div>
+      <MobileCallDrawer calls={listCalls} selectedCallId={selectedCall?.id ?? null} hrefBase={callHrefBase} />
 
-      <div className="mb-6">
-        <CallReader
-          call={selectedCall}
-          position={position}
-          total={total}
-          prevHref={prevHref}
-          nextHref={nextHref}
-          files={client.files}
-        />
+      <div className="mb-6 overflow-hidden rounded-[26px] border border-border/60 bg-surface shadow-[0_30px_80px_-45px_rgba(15,23,42,0.35)] lg:flex lg:h-[72vh] lg:min-h-[560px]">
+        <div className="hidden shrink-0 border-border/60 bg-surface-muted/60 lg:flex lg:w-[340px] lg:flex-col lg:border-r">
+          <CallListPanel calls={listCalls} selectedCallId={selectedCall?.id ?? null} hrefBase={callHrefBase} />
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <CallReader
+            call={selectedCall}
+            position={position}
+            total={total}
+            prevHref={prevHref}
+            nextHref={nextHref}
+            files={client.files}
+          />
+        </div>
       </div>
 
       {client.calendarEvents.length > 0 && (

@@ -6,11 +6,11 @@ export function TopicChips({ heading = "Temas", topics }: { heading?: string; to
   return (
     <div>
       <SectionLabel>{heading}</SectionLabel>
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap gap-2">
         {topics.map((topic) => (
           <span
             key={topic}
-            className="rounded-full bg-surface-muted px-2.5 py-1 text-xs font-medium text-foreground"
+            className="rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium text-foreground"
           >
             {topic}
           </span>

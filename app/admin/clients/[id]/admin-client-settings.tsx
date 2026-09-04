@@ -1,3 +1,4 @@
+import { MoreHorizontal } from "lucide-react";
 import type { ClientDetail } from "@/lib/data/client-detail";
 import type { ClientStatus } from "@/lib/supabase/types";
 import { removeClientDriveFolder, saveClientDriveFolder, updateClientStatus } from "./actions";
@@ -38,12 +39,12 @@ export function AdminClientSettings({
     <details className="group relative">
       <summary
         aria-label="Configuración del cliente"
-        className="flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-md border border-border text-lg font-semibold text-muted transition hover:bg-surface-muted hover:text-foreground [&::-webkit-details-marker]:hidden"
+        className="flex h-10 w-10 cursor-pointer list-none items-center justify-center rounded-full border border-border text-muted transition hover:bg-surface-muted hover:text-foreground [&::-webkit-details-marker]:hidden"
       >
-        <span aria-hidden="true">...</span>
+        <MoreHorizontal size={18} strokeWidth={2} aria-hidden="true" />
       </summary>
 
-      <div className="absolute right-0 z-20 mt-2 w-[min(380px,calc(100vw-2rem))] rounded-lg border border-border bg-surface p-4 text-left shadow-lg">
+      <div className="absolute right-0 z-20 mt-2 w-[min(380px,calc(100vw-2rem))] rounded-2xl border border-border bg-surface p-4 text-left shadow-lg">
         <div className="flex items-start justify-between gap-3 border-b border-border pb-3">
           <div>
             <p className="text-sm font-semibold text-foreground">Configuración</p>
@@ -61,7 +62,7 @@ export function AdminClientSettings({
               id="client-status"
               name="clientStatus"
               defaultValue={client.status}
-              className="min-w-0 flex-1 rounded-md border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+              className="min-w-0 flex-1 rounded-xl border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/30"
             >
               {STATUS_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -71,7 +72,7 @@ export function AdminClientSettings({
             </select>
             <button
               type="submit"
-              className="rounded-md bg-accent px-3 py-2 text-sm font-medium text-white hover:bg-accent-hover"
+              className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white transition hover:bg-accent-hover"
             >
               Guardar
             </button>
@@ -93,7 +94,7 @@ export function AdminClientSettings({
             name="driveFolder"
             defaultValue={client.drive_folder_url ?? client.drive_folder_id ?? ""}
             placeholder="https://drive.google.com/drive/folders/..."
-            className="mt-1.5 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+            className="mt-1.5 w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/30"
           />
           <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
             {client.drive_folder_url ? (
@@ -110,7 +111,7 @@ export function AdminClientSettings({
             )}
             <button
               type="submit"
-              className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-surface-muted"
+              className="rounded-full border border-border px-3.5 py-1.5 text-xs font-semibold text-foreground transition hover:bg-surface-muted"
             >
               Guardar carpeta
             </button>

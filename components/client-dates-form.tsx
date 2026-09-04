@@ -43,7 +43,7 @@ export function ClientDatesForm({
             type="date"
             value={start}
             onChange={(e) => handleStartChange(e.target.value)}
-            className="mt-1 w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+            className="mt-1 w-full rounded-xl border border-border bg-surface px-2.5 py-1.5 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/30"
           />
         </div>
         <div>
@@ -56,14 +56,14 @@ export function ClientDatesForm({
             type="date"
             value={end}
             onChange={(e) => setEnd(e.target.value)}
-            className="mt-1 w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+            className="mt-1 w-full rounded-xl border border-border bg-surface px-2.5 py-1.5 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/30"
           />
         </div>
       </div>
       <button
         type="submit"
         disabled={pending}
-        className="mt-2 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-surface-muted disabled:opacity-60"
+        className="mt-2 rounded-full border border-border px-3.5 py-1.5 text-xs font-semibold text-foreground transition hover:bg-surface-muted disabled:opacity-60"
       >
         {pending ? "Guardando…" : "Guardar fechas"}
       </button>

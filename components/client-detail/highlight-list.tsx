@@ -1,22 +1,22 @@
-import { SectionLabel } from "@/components/ui";
 import { parseInline } from "@/components/markdown-lite";
 
 export function HighlightList({ heading, items }: { heading: string; items: string[] }) {
   if (items.length === 0) return null;
 
   return (
-    <div>
-      <SectionLabel>{heading}</SectionLabel>
-      <ol className="space-y-3">
+    <div className="rounded-2xl border border-border/60 bg-surface-muted p-5">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-2">{heading}</p>
+      <ul className="mt-3 space-y-2.5">
         {items.map((item, i) => (
-          <li key={i} className="flex gap-3">
-            <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[11px] font-semibold text-accent">
-              {String(i + 1).padStart(2, "0")}
-            </span>
+          <li key={i} className="flex gap-2.5">
+            <span
+              aria-hidden="true"
+              className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-accent"
+            />
             <p className="text-sm leading-relaxed text-foreground">{parseInline(item, `hl-${i}`)}</p>
           </li>
         ))}
-      </ol>
+      </ul>
     </div>
   );
 }

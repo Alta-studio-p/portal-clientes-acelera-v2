@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { ArrowLeft } from "lucide-react";
 import type { ClientDetail } from "@/lib/data/client-detail";
 import { StatusBadge } from "@/components/status-badge";
 import { ProgramAlertBadge } from "@/components/program-alert-badge";
@@ -17,13 +18,13 @@ export function ClientHeader({
   const coachNames = client.coaches.map((c) => c.full_name || c.email).join(", ");
 
   return (
-    <div className="mb-6">
+    <div className="mb-5">
       {backHref && (
         <Link
           href={backHref}
-          className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted transition hover:text-foreground"
+          className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-muted transition hover:text-foreground"
         >
-          <span aria-hidden="true">←</span> Todos los clientes
+          <ArrowLeft size={16} strokeWidth={2} aria-hidden="true" /> Todos los clientes
         </Link>
       )}
 
@@ -31,19 +32,19 @@ export function ClientHeader({
         <div className="flex min-w-0 items-center gap-4">
           <div
             aria-hidden="true"
-            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-accent-soft text-lg font-semibold text-accent"
+            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-surface-muted text-lg font-semibold text-foreground"
           >
             {initials(client.full_name, client.email)}
           </div>
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="truncate text-xl font-semibold text-foreground">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <h1 className="truncate text-[28px] font-bold leading-tight text-foreground">
                 {client.full_name || client.email}
               </h1>
               <StatusBadge status={client.status} />
               <ProgramAlertBadge status={client.status} end_date={client.end_date} />
             </div>
-            <p className="mt-0.5 truncate text-sm text-muted">
+            <p className="mt-1 truncate text-sm text-muted">
               {client.email}
               {coachNames && (
                 <>
