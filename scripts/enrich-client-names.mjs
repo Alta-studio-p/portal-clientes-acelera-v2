@@ -97,7 +97,7 @@ ${context}
 Reglas:
 - Responde SOLO con el nombre completo (ej: "Carolina Henao"), sin explicación.
 - Si no puedes identificar el nombre con confianza razonable, responde exactamente: DESCONOCIDO
-- No confundas al cliente con el coach (los coaches se llaman Alex, Jota, Mari o Ross).
+- No confundas al cliente con el coach (los coaches se llaman Alex, Jota, Mari, Ross o Lorena).
 - No inventes apellidos que no aparezcan en el texto.`;
 
   const res = await fetch(`${BASE_URL}/chat/completions`, {

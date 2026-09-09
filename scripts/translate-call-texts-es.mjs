@@ -3,6 +3,16 @@ import fs from "node:fs";
 const APPLY = process.argv.includes("--apply");
 const CHECK_ONLY = process.argv.includes("--check");
 const TRANSLATE_ALL = process.argv.includes("--all") || process.env.TRANSLATE_ES_ALL === "1";
+const ONLY_SOURCE = (
+  process.env.FATHOM_ONLY_SOURCE ||
+  process.argv.find((arg) => arg.startsWith("--source="))?.split("=")[1] ||
+  ""
+).trim().toLowerCase();
+const ONLY_ID = (
+  process.env.TRANSLATE_ES_CALL_ID ||
+  process.argv.find((arg) => arg.startsWith("--id="))?.split("=")[1] ||
+  ""
+).trim();
 const LIMIT = Number(process.env.TRANSLATE_ES_LIMIT || process.argv.find((arg) => arg.startsWith("--limit="))?.split("=")[1] || 0);
 const DELAY_MS = Number(process.env.TRANSLATE_ES_DELAY_MS || 800);
 const CONCURRENCY = Number(process.env.TRANSLATE_ES_CONCURRENCY || 6);
@@ -82,9 +92,13 @@ async function sb(path, options = {}) {
 
 async function fetchCalls() {
   const rows = await sb(
-    "calls?select=id,client_id,title,display_title,started_at,summary,next_steps&or=(summary.not.is.null,next_steps.not.is.null)&order=started_at.asc.nullslast"
+    "calls?select=id,client_id,title,display_title,started_at,summary,next_steps,raw_metadata&or=(summary.not.is.null,next_steps.not.is.null)&order=started_at.asc.nullslast"
   );
-  const candidates = TRANSLATE_ALL ? rows : rows.filter(needsTranslation);
+  const sourceRows = ONLY_SOURCE
+    ? rows.filter((call) => String(call.raw_metadata?.source_key || "").toLowerCase() === ONLY_SOURCE)
+    : rows;
+  const idRows = ONLY_ID ? sourceRows.filter((call) => call.id === ONLY_ID) : sourceRows;
+  const candidates = TRANSLATE_ALL || ONLY_ID ? idRows : idRows.filter(needsTranslation);
   return LIMIT > 0 ? candidates.slice(0, LIMIT) : candidates;
 }
 

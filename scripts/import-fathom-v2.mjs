@@ -4,6 +4,11 @@ const APPLY = process.argv.includes("--apply");
 const MAX_PAGES = Number(process.env.FATHOM_MAX_PAGES || 200);
 const SOURCE_DELAY_MS = Number(process.env.FATHOM_SOURCE_DELAY_MS || 1200);
 const INTERNAL_DOMAIN = "joinaceleratalent.com";
+const ONLY_SOURCE = (
+  process.env.FATHOM_ONLY_SOURCE ||
+  process.argv.find((arg) => arg.startsWith("--source="))?.split("=")[1] ||
+  ""
+).trim().toLowerCase();
 
 // fathom.video: la propia cuenta de Fathom aparece como invitado en llamadas
 // demo internas ("Fathom Demo", 2021) presentes en el historial de las
@@ -24,7 +29,8 @@ const fathomSources = Object.entries(process.env)
     if (!match || !value) return null;
     return { key: match[1].toLowerCase(), apiKey: value };
   })
-  .filter(Boolean);
+  .filter(Boolean)
+  .filter((source) => !ONLY_SOURCE || source.key === ONLY_SOURCE);
 
 if (!SUPABASE_URL || !SUPABASE_KEY || fathomSources.length === 0) {
   console.error("Faltan variables: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY y FATHOM_SOURCE_*_API_KEY.");
@@ -51,6 +57,36 @@ function wait(ms) {
 
 function cleanText(value) {
   return String(value || "").trim();
+}
+
+function sourceEnvPrefix(sourceKey) {
+  return `BACKFILL_SOURCE_${sourceKey.toUpperCase()}`;
+}
+
+function parseDateStart(value) {
+  const clean = cleanText(value);
+  if (!clean) return null;
+  const date = clean.includes("T") ? new Date(clean) : new Date(`${clean}T00:00:00.000Z`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function createdAfterForSource(sourceKey) {
+  const prefix = sourceEnvPrefix(sourceKey);
+  const fromDate = parseDateStart(process.env[`${prefix}_FROM_DATE`]);
+  if (fromDate) return fromDate.toISOString();
+
+  const todayOnly = process.env[`${prefix}_TODAY`] === "1";
+  if (todayOnly) {
+    const now = new Date();
+    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString();
+  }
+
+  const days = Number(process.env[`${prefix}_DAYS`] || 0);
+  if (days > 0) {
+    return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  }
+
+  return null;
 }
 
 function normalizeEmail(value) {
@@ -182,6 +218,7 @@ async function fathomGet(source, path) {
 async function listMeetings(source) {
   const meetings = [];
   let cursor = null;
+  const createdAfter = createdAfterForSource(source.key);
 
   for (let page = 0; page < MAX_PAGES; page += 1) {
     const params = new URLSearchParams({
@@ -190,6 +227,7 @@ async function listMeetings(source) {
       include_action_items: "true",
     });
     if (cursor) params.set("cursor", cursor);
+    if (createdAfter) params.set("created_after", createdAfter);
 
     const data = await fathomGet(source, `meetings?${params.toString()}`);
     const items = Array.isArray(data.items) ? data.items : [];
