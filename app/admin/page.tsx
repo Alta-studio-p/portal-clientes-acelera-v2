@@ -1,31 +1,125 @@
 import Link from "next/link";
-import { getAdminCounts, getCallsNeedingAttention } from "@/lib/data/admin";
+import {
+  getAdminAnalytics,
+  getAdminCounts,
+  getCallsNeedingAttention,
+  getClientsList,
+} from "@/lib/data/admin";
 import { PageHeader, StatCard, Card, EmptyState, SectionLabel } from "@/components/ui";
 import { formatDate } from "@/lib/format";
 import { displayCallTitle } from "@/lib/call-title";
+import { DailyCallsChart } from "@/components/charts/daily-calls-chart";
+import { CoachCallsChart } from "@/components/charts/coach-calls-chart";
+import { StatusBreakdownChart } from "@/components/charts/status-breakdown-chart";
+import { ProgressHeatmap } from "@/components/progress-heatmap";
+import { getProgramProgress } from "@/lib/program-dates";
 
-export default async function AdminHomePage() {
-  const [counts, attentionCalls] = await Promise.all([
+const RANGE_OPTIONS = [
+  { value: 7, label: "7 días" },
+  { value: 30, label: "30 días" },
+  { value: 90, label: "90 días" },
+];
+
+export default async function AdminHomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ days?: string }>;
+}) {
+  const params = await searchParams;
+  const days = RANGE_OPTIONS.some((o) => String(o.value) === params.days) ? Number(params.days) : 30;
+
+  const [counts, attentionCalls, analytics, clients] = await Promise.all([
     getAdminCounts(),
     getCallsNeedingAttention(),
+    getAdminAnalytics({ days }),
+    getClientsList({}),
   ]);
+
+  const avgPerDay = (analytics.totalCallsInRange / days).toFixed(1);
+
+  const topProgress = clients
+    .filter((c) => c.status === "active" || c.status === "extension")
+    .map((c) => ({ id: c.id, name: c.full_name || c.email, progress: getProgramProgress(c) }))
+    .filter((c): c is { id: string; name: string; progress: NonNullable<typeof c.progress> } => c.progress !== null)
+    .filter((c) => c.progress.percentElapsed < 100)
+    .sort((a, b) => b.progress.percentElapsed - a.progress.percentElapsed)
+    .slice(0, 16)
+    .map((c) => ({ id: c.id, name: c.name, percent: c.progress.percentElapsed }));
 
   return (
     <div>
       <PageHeader
         title="Resumen general"
         description="Vista consolidada de clientes, coaches y llamadas."
+        actions={
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            {[
+              { label: "Clientes", value: counts.clients },
+              { label: "Coaches", value: counts.coaches },
+              { label: "Llamadas", value: counts.calls },
+              { label: "Con resumen", value: counts.callsWithSummary },
+              { label: "Con contexto", value: counts.clientsWithContext },
+            ].map((s) => (
+              <div key={s.label} className="text-right">
+                <p className="text-2xl font-bold leading-none tabular-nums text-accent">{s.value}</p>
+                <p className="mt-1 text-[11px] font-medium text-muted-2">{s.label}</p>
+              </div>
+            ))}
+          </div>
+        }
       />
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <StatCard label="Clientes" value={counts.clients} />
-        <StatCard label="Coaches" value={counts.coaches} />
-        <StatCard label="Llamadas" value={counts.calls} />
-        <StatCard label="Llamadas con resumen" value={counts.callsWithSummary} />
-        <StatCard label="Clientes con contexto" value={counts.clientsWithContext} />
+      <div className="mt-10">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <SectionLabel>Tendencia</SectionLabel>
+          <div className="flex flex-wrap gap-2">
+            {RANGE_OPTIONS.map((o) => (
+              <Link
+                key={o.value}
+                href={`/admin?days=${o.value}`}
+                className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition ${
+                  days === o.value
+                    ? "border-accent bg-accent-soft text-accent"
+                    : "border-border text-muted hover:bg-surface-muted"
+                }`}
+              >
+                {o.label}
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <StatCard label={`Llamadas en ${days} días`} value={analytics.totalCallsInRange} tone="accent" />
+          <StatCard label="Promedio por día" value={avgPerDay} />
+          <StatCard label="Coaches activos" value={analytics.coachCalls.length} />
+          <StatCard label="Clientes totales" value={counts.clients} />
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <Card className="p-5 lg:col-span-2">
+            <SectionLabel>Llamadas por día</SectionLabel>
+            <DailyCallsChart data={analytics.dailyCalls} />
+          </Card>
+
+          <Card className="p-5">
+            <SectionLabel>Llamadas por coach</SectionLabel>
+            <CoachCallsChart data={analytics.coachCalls} />
+          </Card>
+
+          <Card className="p-5">
+            <SectionLabel>Clientes por estado</SectionLabel>
+            <StatusBreakdownChart data={analytics.statusBreakdown} />
+
+            <div className="mt-5 border-t border-border pt-4">
+              <SectionLabel>Mayor progreso</SectionLabel>
+              <ProgressHeatmap clients={topProgress} />
+            </div>
+          </Card>
+        </div>
       </div>
 
-      <div className="mt-8">
+      <div className="mt-10">
         <SectionLabel>Llamadas que requieren atención</SectionLabel>
         {attentionCalls.length === 0 ? (
           <EmptyState
@@ -33,14 +127,10 @@ export default async function AdminHomePage() {
             description="No hay llamadas sin resumen ni sin cliente asignado."
           />
         ) : (
-          <Card className="divide-y divide-border p-0">
-            {attentionCalls.map((call) => (
-              <div key={call.id} className="flex items-center justify-between px-4 py-3 text-sm">
-                <div>
-                  <p className="font-medium text-foreground">{displayCallTitle(call)}</p>
-                  <p className="text-xs text-muted-2">{formatDate(call.started_at)}</p>
-                </div>
-                <div className="flex gap-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {attentionCalls.map((call) => {
+              const badges = (
+                <div className="mt-3 flex flex-wrap gap-1.5">
                   {!call.summary && (
                     <span className="rounded-full bg-[--status-extension-bg] px-2.5 py-0.5 text-xs font-medium text-[--status-extension]">
                       Sin resumen
@@ -52,9 +142,33 @@ export default async function AdminHomePage() {
                     </span>
                   )}
                 </div>
-              </div>
-            ))}
-          </Card>
+              );
+
+              const content = (
+                <>
+                  <p className="line-clamp-2 text-sm font-medium text-foreground">
+                    {displayCallTitle(call)}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-2">{formatDate(call.started_at)}</p>
+                  {badges}
+                </>
+              );
+
+              return call.client_id ? (
+                <Link
+                  key={call.id}
+                  href={`/admin/clients/${call.client_id}?call=${call.id}`}
+                  className="rounded-xl border border-border bg-surface p-4 transition hover:border-accent/60 hover:shadow-[0_12px_28px_-18px_rgba(15,23,42,0.45)]"
+                >
+                  {content}
+                </Link>
+              ) : (
+                <div key={call.id} className="rounded-xl border border-border bg-surface p-4">
+                  {content}
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
 

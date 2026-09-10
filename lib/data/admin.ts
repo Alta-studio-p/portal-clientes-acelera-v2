@@ -36,6 +36,7 @@ export interface ClientListRow extends Client {
   coach_names: string[];
   call_count: number;
   last_call_at: string | null;
+  calls: { id: string; started_at: string | null }[];
 }
 
 export async function getClientsList(filters: {
@@ -398,5 +399,91 @@ export async function getAdminCalendarDashboard({
     events: mappedEvents,
     unscheduledCalls,
     coaches,
+  };
+}
+
+export interface DailyCallCount {
+  date: string; // YYYY-MM-DD (UTC)
+  count: number;
+}
+
+export interface CoachCallCount {
+  coachId: string;
+  name: string;
+  count: number;
+}
+
+export interface StatusBreakdown {
+  active: number;
+  extension: number;
+  inactive: number;
+}
+
+export interface AdminAnalytics {
+  days: number;
+  dailyCalls: DailyCallCount[];
+  coachCalls: CoachCallCount[];
+  statusBreakdown: StatusBreakdown;
+  totalCallsInRange: number;
+}
+
+const DAY_MS = 1000 * 60 * 60 * 24;
+
+export async function getAdminAnalytics({ days = 30 }: { days?: number }): Promise<AdminAnalytics> {
+  const supabase = await createClient();
+
+  const now = new Date();
+  const todayUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const fromUTC = todayUTC - (days - 1) * DAY_MS;
+  const from = new Date(fromUTC).toISOString();
+  const to = new Date(todayUTC + DAY_MS).toISOString();
+
+  const [{ data: coachesData }, { data: callsData }, activeCount, extensionCount, inactiveCount] =
+    await Promise.all([
+      supabase
+        .from("coaches")
+        .select("id, full_name, email")
+        .eq("is_active", true)
+        .order("full_name", { ascending: true }),
+      supabase.from("calls").select("started_at, coach_id").gte("started_at", from).lt("started_at", to),
+      supabase.from("clients").select("id", { count: "exact", head: true }).eq("status", "active"),
+      supabase.from("clients").select("id", { count: "exact", head: true }).eq("status", "extension"),
+      supabase.from("clients").select("id", { count: "exact", head: true }).eq("status", "inactive"),
+    ]);
+
+  const coaches = (coachesData ?? []) as Pick<Coach, "id" | "full_name" | "email">[];
+  const calls = (callsData ?? []) as { started_at: string | null; coach_id: string | null }[];
+
+  // Zero-filled día a día para que el eje X sea continuo aunque falten datos.
+  const dayBuckets = new Map<string, number>();
+  for (let i = 0; i < days; i++) {
+    dayBuckets.set(new Date(fromUTC + i * DAY_MS).toISOString().slice(0, 10), 0);
+  }
+  for (const call of calls) {
+    if (!call.started_at) continue;
+    const key = call.started_at.slice(0, 10);
+    if (dayBuckets.has(key)) dayBuckets.set(key, (dayBuckets.get(key) ?? 0) + 1);
+  }
+
+  const coachCallCounts = new Map<string, number>();
+  for (const call of calls) {
+    if (!call.coach_id) continue;
+    coachCallCounts.set(call.coach_id, (coachCallCounts.get(call.coach_id) ?? 0) + 1);
+  }
+
+  return {
+    days,
+    dailyCalls: Array.from(dayBuckets.entries()).map(([date, count]) => ({ date, count })),
+    coachCalls: coaches.map((coach) => ({
+      coachId: coach.id,
+      name: coach.full_name || coach.email,
+      count: coachCallCounts.get(coach.id) ?? 0,
+    })),
+    statusBreakdown: {
+      active: activeCount.count ?? 0,
+      extension: extensionCount.count ?? 0,
+      inactive: inactiveCount.count ?? 0,
+    },
+    totalCallsInRange: calls.length,
   };
 }

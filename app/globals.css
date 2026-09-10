@@ -25,6 +25,18 @@
 
   --alert-warning: #d68552;
   --alert-warning-bg: #faece1;
+
+  /* Paleta categórica para gráficas (identidad por coach), hasta 6 coaches.
+     Orden fijo, validado con el validador de paletas del skill de dataviz
+     (CVD-safe en modo claro, worst adjacent ΔE 9.1) — no reordenar ni ciclar.
+     Se evita el naranja/verde puros porque ya tienen significado de estado
+     (extensión/activo) en el resto de la app. */
+  --chart-1: #2a78d6;
+  --chart-2: #e87ba4;
+  --chart-3: #4a3aa7;
+  --chart-4: #1baf7a;
+  --chart-5: #eda100;
+  --chart-6: #e34948;
 }
 
 @theme inline {

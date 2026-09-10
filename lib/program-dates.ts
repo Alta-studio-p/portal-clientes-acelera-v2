@@ -13,12 +13,20 @@ export function addThreeMonthsSameDay(startDate: string): string {
   return result.toISOString().slice(0, 10);
 }
 
-function daysUntil(dateStr: string): number {
-  const today = new Date();
-  const todayUTC = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+const DAY_MS = 1000 * 60 * 60 * 24;
+
+function parseUTCDate(dateStr: string): number {
   const [year, month, day] = dateStr.split("-").map(Number);
-  const targetUTC = Date.UTC(year, month - 1, day);
-  return Math.round((targetUTC - todayUTC) / (1000 * 60 * 60 * 24));
+  return Date.UTC(year, month - 1, day);
+}
+
+function todayUTC(): number {
+  const today = new Date();
+  return Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+}
+
+function daysUntil(dateStr: string): number {
+  return Math.round((parseUTCDate(dateStr) - todayUTC()) / DAY_MS);
 }
 
 export interface ProgramAlert {
@@ -44,4 +52,58 @@ export function getProgramAlert(client: {
   else label = `Termina en ${daysRemaining} día${daysRemaining === 1 ? "" : "s"}`;
 
   return { daysRemaining, label };
+}
+
+export interface ProgramProgress {
+  percentElapsed: number;
+  daysElapsed: number;
+  daysRemaining: number;
+  totalDays: number;
+}
+
+// Progreso del programa como % de días transcurridos entre start_date y
+// end_date. null si al cliente le faltan esas fechas (clientes legacy antes
+// de supabase-add-program-dates.sql).
+export function getProgramProgress(client: {
+  start_date: string | null;
+  end_date: string | null;
+}): ProgramProgress | null {
+  if (!client.start_date || !client.end_date) return null;
+
+  const start = parseUTCDate(client.start_date);
+  const end = parseUTCDate(client.end_date);
+  const totalDays = Math.round((end - start) / DAY_MS);
+  if (totalDays <= 0) return null;
+
+  const daysElapsed = Math.min(totalDays, Math.max(0, Math.round((todayUTC() - start) / DAY_MS)));
+  const percentElapsed = Math.round((daysElapsed / totalDays) * 100);
+  const daysRemaining = totalDays - daysElapsed;
+
+  return { percentElapsed, daysElapsed, daysRemaining, totalDays };
+}
+
+// Todos los programas de Acelera son de llamada semanal. "Atrasado" = pasaron
+// más de WEEKLY_GRACE_DAYS desde la última llamada (o desde el inicio del
+// programa si todavía no hubo ninguna), y el cliente sigue activo/extensión.
+const WEEKLY_GRACE_DAYS = 9;
+
+export interface CadenceStatus {
+  behind: boolean;
+  daysSinceLastCall: number | null;
+}
+
+export function getCadenceStatus(client: {
+  status: ClientStatus | string | null;
+  start_date: string | null;
+  last_call_at: string | null;
+}): CadenceStatus {
+  if (client.status !== "active" && client.status !== "extension") {
+    return { behind: false, daysSinceLastCall: null };
+  }
+
+  const referenceDate = client.last_call_at ? client.last_call_at.slice(0, 10) : client.start_date;
+  if (!referenceDate) return { behind: false, daysSinceLastCall: null };
+
+  const daysSinceLastCall = Math.round((todayUTC() - parseUTCDate(referenceDate)) / DAY_MS);
+  return { behind: daysSinceLastCall > WEEKLY_GRACE_DAYS, daysSinceLastCall };
 }

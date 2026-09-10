@@ -20,11 +20,25 @@ export function PageHeader({
   );
 }
 
-export function StatCard({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
+export function StatCard({
+  label,
+  value,
+  hint,
+  tone,
+}: {
+  label: string;
+  value: string | number;
+  hint?: string;
+  /** Colorea el valor para métricas que necesitan resaltar (alertas, progreso). Por defecto es neutro. */
+  tone?: "accent" | "warning";
+}) {
+  const valueColor =
+    tone === "accent" ? "text-accent" : tone === "warning" ? "text-[--alert-warning]" : "text-foreground";
+
   return (
     <div className="rounded-xl border border-border bg-surface px-4 py-3.5">
       <p className="text-xs font-medium text-muted">{label}</p>
-      <p className="mt-1.5 text-2xl font-semibold text-foreground">{value}</p>
+      <p className={`mt-1.5 text-2xl font-semibold ${valueColor}`}>{value}</p>
       {hint && <p className="mt-1 text-xs text-muted-2">{hint}</p>}
     </div>
   );
