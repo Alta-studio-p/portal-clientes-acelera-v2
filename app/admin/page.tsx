@@ -9,9 +9,9 @@ import { PageHeader, StatCard, Card, EmptyState, SectionLabel } from "@/componen
 import { formatDate } from "@/lib/format";
 import { displayCallTitle } from "@/lib/call-title";
 import { DailyCallsChart } from "@/components/charts/daily-calls-chart";
-import { CoachCallsChart } from "@/components/charts/coach-calls-chart";
 import { StatusBreakdownChart } from "@/components/charts/status-breakdown-chart";
 import { ProgressHeatmap } from "@/components/progress-heatmap";
+import { UpcomingDeadlines } from "@/components/upcoming-deadlines";
 import { getProgramProgress } from "@/lib/program-dates";
 
 const RANGE_OPTIONS = [
@@ -37,14 +37,23 @@ export default async function AdminHomePage({
 
   const avgPerDay = (analytics.totalCallsInRange / days).toFixed(1);
 
-  const topProgress = clients
+  const inProgressWithDates = clients
     .filter((c) => c.status === "active" || c.status === "extension")
     .map((c) => ({ id: c.id, name: c.full_name || c.email, progress: getProgramProgress(c) }))
     .filter((c): c is { id: string; name: string; progress: NonNullable<typeof c.progress> } => c.progress !== null)
-    .filter((c) => c.progress.percentElapsed < 100)
+    .filter((c) => c.progress.percentElapsed < 100);
+
+  const topProgress = [...inProgressWithDates]
     .sort((a, b) => b.progress.percentElapsed - a.progress.percentElapsed)
     .slice(0, 16)
     .map((c) => ({ id: c.id, name: c.name, percent: c.progress.percentElapsed }));
+
+  // Lo que más le importa a Luciano: quién está más cerca de terminar su
+  // programa y cómo va de progreso — no cuántas llamadas tuvo cada coach.
+  const upcomingDeadlines = [...inProgressWithDates]
+    .sort((a, b) => a.progress.daysRemaining - b.progress.daysRemaining)
+    .slice(0, 8)
+    .map((c) => ({ id: c.id, name: c.name, percent: c.progress.percentElapsed, daysRemaining: c.progress.daysRemaining }));
 
   return (
     <div>
@@ -99,12 +108,12 @@ export default async function AdminHomePage({
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <Card className="p-5 lg:col-span-2">
             <SectionLabel>Llamadas por día</SectionLabel>
-            <DailyCallsChart data={analytics.dailyCalls} />
+            <DailyCallsChart data={analytics.dailyCalls} coaches={analytics.coachCalls} />
           </Card>
 
           <Card className="p-5">
-            <SectionLabel>Llamadas por coach</SectionLabel>
-            <CoachCallsChart data={analytics.coachCalls} />
+            <SectionLabel>Próximos a finalizar</SectionLabel>
+            <UpcomingDeadlines clients={upcomingDeadlines} />
           </Card>
 
           <Card className="p-5">

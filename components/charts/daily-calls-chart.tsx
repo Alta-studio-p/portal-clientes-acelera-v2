@@ -2,17 +2,42 @@
 
 import { useState } from "react";
 import { CalendarX } from "lucide-react";
-import type { DailyCallCount } from "@/lib/data/admin";
+import type { DailyCallBar } from "@/lib/data/admin";
 import { formatShortDate } from "@/lib/format";
 
-export function DailyCallsChart({ data }: { data: DailyCallCount[] }) {
-  const [hovered, setHovered] = useState<number | null>(null);
+const COLOR_VARS = [
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
+  "var(--chart-6)",
+];
+
+interface HoveredSegment {
+  dayIndex: number;
+  coachId: string;
+}
+
+export function DailyCallsChart({
+  data,
+  coaches,
+}: {
+  data: DailyCallBar[];
+  coaches: { coachId: string; name: string }[];
+}) {
+  const [hovered, setHovered] = useState<HoveredSegment | null>(null);
   const [showTable, setShowTable] = useState(false);
-  const total = data.reduce((sum, d) => sum + d.count, 0);
-  const max = Math.max(1, ...data.map((d) => d.count));
+  const grandTotal = data.reduce((sum, d) => sum + d.total, 0);
+  const maxTotal = Math.max(1, ...data.map((d) => d.total));
   const dense = data.length > 45;
 
-  if (total === 0) {
+  const colorFor = (coachId: string) => {
+    const idx = coaches.findIndex((c) => c.coachId === coachId);
+    return COLOR_VARS[idx >= 0 ? idx % COLOR_VARS.length : COLOR_VARS.length - 1];
+  };
+
+  if (grandTotal === 0) {
     return (
       <div className="flex items-center gap-2.5 rounded-lg bg-surface-muted px-4 py-3.5 text-sm text-muted-2">
         <CalendarX size={17} strokeWidth={2} className="shrink-0" aria-hidden="true" />
@@ -26,62 +51,100 @@ export function DailyCallsChart({ data }: { data: DailyCallCount[] }) {
   // nunca una etiqueta por barra, se vuelve ilegible en el rango de 90 días.
   const labelStep = Math.max(1, Math.ceil(data.length / 8));
 
+  const hoveredEntry =
+    hovered !== null
+      ? data[hovered.dayIndex]?.segments.find((s) => s.coachId === hovered.coachId)
+      : undefined;
+
   return (
     <div>
       <div className="overflow-x-auto">
         <div style={dense ? { minWidth: data.length * 7 } : undefined}>
           <div className="flex items-end gap-[3px]" style={{ height: CHART_HEIGHT_PX }}>
-            {data.map((d, i) => {
-              const heightPx = d.count === 0 ? 2 : Math.max(6, Math.round((d.count / max) * CHART_HEIGHT_PX));
-              const isHovered = hovered === i;
-              const isToday = i === data.length - 1;
+            {data.map((day, dayIndex) => {
+              const totalHeightPx =
+                day.total === 0 ? 2 : Math.max(6, Math.round((day.total / maxTotal) * CHART_HEIGHT_PX));
+              const isDayHovered = hovered?.dayIndex === dayIndex;
+
               return (
                 <div
-                  key={d.date}
+                  key={day.date}
                   className="group relative flex h-full min-w-[3px] flex-1 items-end"
-                  onMouseEnter={() => setHovered(i)}
-                  onMouseLeave={() => setHovered(null)}
-                  onFocus={() => setHovered(i)}
-                  onBlur={() => setHovered(null)}
-                  tabIndex={0}
-                  role="img"
-                  aria-label={`${formatShortDate(d.date)}: ${d.count} llamada${d.count === 1 ? "" : "s"}`}
                 >
-                  <div
-                    className={`w-full rounded-t-[4px] transition-colors ${
-                      isHovered ? "bg-accent-hover" : isToday ? "bg-accent" : "bg-accent/80"
-                    }`}
-                    style={{ height: heightPx }}
-                  />
-                  {isHovered && (
+                  {isDayHovered && hoveredEntry && (
                     <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs font-medium text-white shadow-lg">
-                      <span className="font-semibold tabular-nums">{d.count}</span>{" "}
-                      {d.count === 1 ? "llamada" : "llamadas"} · {formatShortDate(d.date)}
+                      <span className="font-semibold">{hoveredEntry.name}</span> ·{" "}
+                      <span className="font-semibold tabular-nums">{hoveredEntry.count}</span>{" "}
+                      {hoveredEntry.count === 1 ? "llamada" : "llamadas"} · {formatShortDate(day.date)}
                     </div>
                   )}
+                  <div className="flex w-full flex-col" style={{ height: totalHeightPx }}>
+                    {day.segments.length === 0 ? (
+                      <div className="w-full flex-1 rounded-t-[4px] bg-border/60" />
+                    ) : (
+                      day.segments.map((seg, segIndex) => {
+                        const segHeightPx = Math.max(2, Math.round((seg.count / day.total) * totalHeightPx));
+                        const isSegHovered = hovered?.dayIndex === dayIndex && hovered.coachId === seg.coachId;
+                        return (
+                          <div
+                            key={seg.coachId}
+                            className={`w-full transition-opacity ${segIndex === 0 ? "rounded-t-[4px]" : ""}`}
+                            style={{
+                              height: segHeightPx,
+                              backgroundColor: colorFor(seg.coachId),
+                              opacity: isSegHovered ? 1 : hovered && hovered.dayIndex === dayIndex ? 0.55 : 1,
+                              marginBottom: segIndex < day.segments.length - 1 ? 1 : 0,
+                            }}
+                            onMouseEnter={() => setHovered({ dayIndex, coachId: seg.coachId })}
+                            onMouseLeave={() => setHovered(null)}
+                            onFocus={() => setHovered({ dayIndex, coachId: seg.coachId })}
+                            onBlur={() => setHovered(null)}
+                            tabIndex={0}
+                            role="img"
+                            aria-label={`${seg.name}, ${formatShortDate(day.date)}: ${seg.count} llamada${seg.count === 1 ? "" : "s"}`}
+                          />
+                        );
+                      })
+                    )}
+                  </div>
                 </div>
               );
             })}
           </div>
 
           <div className="mt-1.5 flex gap-[3px]">
-            {data.map((d, i) => {
+            {data.map((day, i) => {
               const isToday = i === data.length - 1;
               const showLabel = isToday || i % labelStep === 0;
               return (
                 <div
-                  key={d.date}
+                  key={day.date}
                   className={`min-w-[3px] flex-1 whitespace-nowrap text-center text-[10px] ${
                     isToday ? "font-semibold text-accent" : "text-muted-2"
                   }`}
                 >
-                  {showLabel ? (isToday ? "Hoy" : formatShortDate(d.date)) : ""}
+                  {showLabel ? (isToday ? "Hoy" : formatShortDate(day.date)) : ""}
                 </div>
               );
             })}
           </div>
         </div>
       </div>
+
+      {coaches.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
+          {coaches.map((coach, i) => (
+            <span key={coach.coachId} className="inline-flex items-center gap-1.5 text-xs text-muted">
+              <span
+                className="h-2.5 w-2.5 shrink-0 rounded-full"
+                style={{ backgroundColor: COLOR_VARS[i % COLOR_VARS.length] }}
+                aria-hidden="true"
+              />
+              {coach.name}
+            </span>
+          ))}
+        </div>
+      )}
 
       <button
         type="button"
@@ -92,19 +155,29 @@ export function DailyCallsChart({ data }: { data: DailyCallCount[] }) {
       </button>
 
       {showTable && (
-        <div className="mt-2 max-h-48 overflow-y-auto rounded-lg border border-border">
-          <table className="w-full text-xs">
+        <div className="mt-2 max-h-56 overflow-auto rounded-lg border border-border">
+          <table className="w-full min-w-max text-xs">
             <thead className="sticky top-0 bg-surface-muted">
               <tr className="text-left text-muted-2">
                 <th className="px-3 py-1.5 font-medium">Fecha</th>
-                <th className="px-3 py-1.5 font-medium">Llamadas</th>
+                {coaches.map((coach) => (
+                  <th key={coach.coachId} className="px-3 py-1.5 font-medium">
+                    {coach.name}
+                  </th>
+                ))}
+                <th className="px-3 py-1.5 font-medium">Total</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {data.map((d) => (
-                <tr key={d.date}>
-                  <td className="px-3 py-1.5 text-foreground">{formatShortDate(d.date)}</td>
-                  <td className="px-3 py-1.5 tabular-nums text-foreground">{d.count}</td>
+              {data.map((day) => (
+                <tr key={day.date}>
+                  <td className="px-3 py-1.5 text-foreground">{formatShortDate(day.date)}</td>
+                  {coaches.map((coach) => (
+                    <td key={coach.coachId} className="px-3 py-1.5 tabular-nums text-foreground">
+                      {day.segments.find((s) => s.coachId === coach.coachId)?.count ?? 0}
+                    </td>
+                  ))}
+                  <td className="px-3 py-1.5 tabular-nums font-medium text-foreground">{day.total}</td>
                 </tr>
               ))}
             </tbody>

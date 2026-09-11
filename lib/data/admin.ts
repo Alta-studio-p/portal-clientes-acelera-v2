@@ -402,9 +402,19 @@ export async function getAdminCalendarDashboard({
   };
 }
 
-export interface DailyCallCount {
-  date: string; // YYYY-MM-DD (UTC)
+export interface DailyCallSegment {
+  coachId: string;
+  name: string;
   count: number;
+}
+
+export interface DailyCallBar {
+  date: string; // YYYY-MM-DD (UTC)
+  total: number;
+  // Solo coaches con >=1 llamada ese día, en el mismo orden fijo que
+  // `coachCalls` (alfabético) — así el color de cada coach es siempre el
+  // mismo sin importar qué días aparezca.
+  segments: DailyCallSegment[];
 }
 
 export interface CoachCallCount {
@@ -421,7 +431,7 @@ export interface StatusBreakdown {
 
 export interface AdminAnalytics {
   days: number;
-  dailyCalls: DailyCallCount[];
+  dailyCalls: DailyCallBar[];
   coachCalls: CoachCallCount[];
   statusBreakdown: StatusBreakdown;
   totalCallsInRange: number;
@@ -454,16 +464,26 @@ export async function getAdminAnalytics({ days = 30 }: { days?: number }): Promi
   const coaches = (coachesData ?? []) as Pick<Coach, "id" | "full_name" | "email">[];
   const calls = (callsData ?? []) as { started_at: string | null; coach_id: string | null }[];
 
-  // Zero-filled día a día para que el eje X sea continuo aunque falten datos.
-  const dayBuckets = new Map<string, number>();
+  // Zero-filled día a día para que el eje X sea continuo aunque falten datos,
+  // con un sub-conteo por coach para poder apilar la barra de cada día.
+  const dayCoachBuckets = new Map<string, Map<string, number>>();
   for (let i = 0; i < days; i++) {
-    dayBuckets.set(new Date(fromUTC + i * DAY_MS).toISOString().slice(0, 10), 0);
+    dayCoachBuckets.set(new Date(fromUTC + i * DAY_MS).toISOString().slice(0, 10), new Map());
   }
   for (const call of calls) {
-    if (!call.started_at) continue;
+    if (!call.started_at || !call.coach_id) continue;
     const key = call.started_at.slice(0, 10);
-    if (dayBuckets.has(key)) dayBuckets.set(key, (dayBuckets.get(key) ?? 0) + 1);
+    const dayMap = dayCoachBuckets.get(key);
+    if (!dayMap) continue;
+    dayMap.set(call.coach_id, (dayMap.get(call.coach_id) ?? 0) + 1);
   }
+
+  const dailyCalls: DailyCallBar[] = Array.from(dayCoachBuckets.entries()).map(([date, dayMap]) => {
+    const segments = coaches
+      .map((coach) => ({ coachId: coach.id, name: coach.full_name || coach.email, count: dayMap.get(coach.id) ?? 0 }))
+      .filter((s) => s.count > 0);
+    return { date, total: segments.reduce((sum, s) => sum + s.count, 0), segments };
+  });
 
   const coachCallCounts = new Map<string, number>();
   for (const call of calls) {
@@ -473,7 +493,7 @@ export async function getAdminAnalytics({ days = 30 }: { days?: number }): Promi
 
   return {
     days,
-    dailyCalls: Array.from(dayBuckets.entries()).map(([date, count]) => ({ date, count })),
+    dailyCalls,
     coachCalls: coaches.map((coach) => ({
       coachId: coach.id,
       name: coach.full_name || coach.email,
