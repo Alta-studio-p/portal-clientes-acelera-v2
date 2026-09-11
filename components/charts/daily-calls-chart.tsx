@@ -48,7 +48,7 @@ export function DailyCallsChart({
 
   return (
     <div>
-      <div className="overflow-x-auto">
+      <div className={dense ? "overflow-x-auto overflow-y-hidden" : undefined}>
         <div style={dense ? { minWidth: data.length * 7 } : undefined}>
           <div className="flex items-end gap-[3px]" style={{ height: CHART_HEIGHT_PX }}>
             {data.map((day, dayIndex) => {
