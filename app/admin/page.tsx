@@ -10,9 +10,9 @@ import { formatDate } from "@/lib/format";
 import { displayCallTitle } from "@/lib/call-title";
 import { DailyCallsChart } from "@/components/charts/daily-calls-chart";
 import { StatusBreakdownChart } from "@/components/charts/status-breakdown-chart";
-import { ProgressHeatmap } from "@/components/progress-heatmap";
 import { UpcomingDeadlines } from "@/components/upcoming-deadlines";
-import { getProgramProgress } from "@/lib/program-dates";
+import { BehindCadenceList } from "@/components/behind-cadence-list";
+import { getCadenceStatus, getProgramProgress } from "@/lib/program-dates";
 
 const RANGE_OPTIONS = [
   { value: 7, label: "7 días" },
@@ -43,17 +43,28 @@ export default async function AdminHomePage({
     .filter((c): c is { id: string; name: string; progress: NonNullable<typeof c.progress> } => c.progress !== null)
     .filter((c) => c.progress.percentElapsed < 100);
 
-  const topProgress = [...inProgressWithDates]
-    .sort((a, b) => b.progress.percentElapsed - a.progress.percentElapsed)
-    .slice(0, 16)
-    .map((c) => ({ id: c.id, name: c.name, percent: c.progress.percentElapsed }));
-
   // Lo que más le importa a Luciano: quién está más cerca de terminar su
   // programa y cómo va de progreso — no cuántas llamadas tuvo cada coach.
   const upcomingDeadlines = [...inProgressWithDates]
     .sort((a, b) => a.progress.daysRemaining - b.progress.daysRemaining)
     .slice(0, 8)
     .map((c) => ({ id: c.id, name: c.name, percent: c.progress.percentElapsed, daysRemaining: c.progress.daysRemaining }));
+
+  // Distinto de "próximos a finalizar": esto es sobre cadencia semanal, no
+  // sobre fecha final — un cliente puede ir bien de tiempo pero llevar
+  // semanas sin sesión, o viceversa.
+  const behindClients = clients
+    .filter((c) => c.status === "active" || c.status === "extension")
+    .map((c) => ({
+      id: c.id,
+      name: c.full_name || c.email,
+      coachNames: c.coach_names,
+      cadence: getCadenceStatus({ status: c.status, start_date: c.start_date, last_call_at: c.last_call_at }),
+    }))
+    .filter((c) => c.cadence.behind)
+    .sort((a, b) => (b.cadence.daysSinceLastCall ?? 0) - (a.cadence.daysSinceLastCall ?? 0))
+    .slice(0, 8)
+    .map((c) => ({ id: c.id, name: c.name, coachNames: c.coachNames, daysSinceLastCall: c.cadence.daysSinceLastCall ?? 0 }));
 
   return (
     <div>
@@ -121,8 +132,8 @@ export default async function AdminHomePage({
             <StatusBreakdownChart data={analytics.statusBreakdown} />
 
             <div className="mt-5 border-t border-border pt-4">
-              <SectionLabel>Mayor progreso</SectionLabel>
-              <ProgressHeatmap clients={topProgress} />
+              <SectionLabel>Sin llamada esta semana</SectionLabel>
+              <BehindCadenceList clients={behindClients} />
             </div>
           </Card>
         </div>
