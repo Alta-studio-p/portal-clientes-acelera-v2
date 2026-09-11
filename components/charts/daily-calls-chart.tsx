@@ -14,11 +14,6 @@ const COLOR_VARS = [
   "var(--chart-6)",
 ];
 
-interface HoveredSegment {
-  dayIndex: number;
-  coachId: string;
-}
-
 export function DailyCallsChart({
   data,
   coaches,
@@ -26,7 +21,7 @@ export function DailyCallsChart({
   data: DailyCallBar[];
   coaches: { coachId: string; name: string }[];
 }) {
-  const [hovered, setHovered] = useState<HoveredSegment | null>(null);
+  const [hoveredDay, setHoveredDay] = useState<number | null>(null);
   const [showTable, setShowTable] = useState(false);
   const grandTotal = data.reduce((sum, d) => sum + d.total, 0);
   const maxTotal = Math.max(1, ...data.map((d) => d.total));
@@ -51,11 +46,6 @@ export function DailyCallsChart({
   // nunca una etiqueta por barra, se vuelve ilegible en el rango de 90 días.
   const labelStep = Math.max(1, Math.ceil(data.length / 8));
 
-  const hoveredEntry =
-    hovered !== null
-      ? data[hovered.dayIndex]?.segments.find((s) => s.coachId === hovered.coachId)
-      : undefined;
-
   return (
     <div>
       <div className="overflow-x-auto">
@@ -64,44 +54,59 @@ export function DailyCallsChart({
             {data.map((day, dayIndex) => {
               const totalHeightPx =
                 day.total === 0 ? 2 : Math.max(6, Math.round((day.total / maxTotal) * CHART_HEIGHT_PX));
-              const isDayHovered = hovered?.dayIndex === dayIndex;
+              const isDayHovered = hoveredDay === dayIndex;
 
               return (
                 <div
                   key={day.date}
-                  className="group relative flex h-full min-w-[3px] flex-1 items-end"
+                  className="group relative flex h-full min-w-[10px] flex-1 cursor-pointer items-end"
+                  onMouseEnter={() => setHoveredDay(dayIndex)}
+                  onMouseLeave={() => setHoveredDay(null)}
+                  onFocus={() => setHoveredDay(dayIndex)}
+                  onBlur={() => setHoveredDay(null)}
+                  tabIndex={0}
+                  aria-label={`${formatShortDate(day.date)}: ${day.total} llamada${day.total === 1 ? "" : "s"}${
+                    day.segments.length > 0
+                      ? ", " + day.segments.map((s) => `${s.name} ${s.count}`).join(", ")
+                      : ""
+                  }`}
                 >
-                  {isDayHovered && hoveredEntry && (
-                    <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs font-medium text-white shadow-lg">
-                      <span className="font-semibold">{hoveredEntry.name}</span> ·{" "}
-                      <span className="font-semibold tabular-nums">{hoveredEntry.count}</span>{" "}
-                      {hoveredEntry.count === 1 ? "llamada" : "llamadas"} · {formatShortDate(day.date)}
+                  {isDayHovered && day.segments.length > 0 && (
+                    <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-foreground px-2.5 py-2 text-xs text-white shadow-lg">
+                      <p className="mb-1 font-semibold">{formatShortDate(day.date)} · {day.total} llamadas</p>
+                      <ul className="space-y-0.5">
+                        {day.segments.map((seg) => (
+                          <li key={seg.coachId} className="flex items-center gap-1.5">
+                            <span
+                              className="h-2 w-2 shrink-0 rounded-full"
+                              style={{ backgroundColor: colorFor(seg.coachId) }}
+                              aria-hidden="true"
+                            />
+                            <span className="flex-1">{seg.name}</span>
+                            <span className="font-semibold tabular-nums">{seg.count}</span>
+                          </li>
+                        ))}
+                      </ul>
                     </div>
                   )}
-                  <div className="flex w-full flex-col" style={{ height: totalHeightPx }}>
+                  <div
+                    className={`flex w-full flex-col transition-opacity ${isDayHovered ? "" : "group-hover:opacity-80"}`}
+                    style={{ height: totalHeightPx }}
+                  >
                     {day.segments.length === 0 ? (
                       <div className="w-full flex-1 rounded-t-[4px] bg-border/60" />
                     ) : (
                       day.segments.map((seg, segIndex) => {
                         const segHeightPx = Math.max(2, Math.round((seg.count / day.total) * totalHeightPx));
-                        const isSegHovered = hovered?.dayIndex === dayIndex && hovered.coachId === seg.coachId;
                         return (
                           <div
                             key={seg.coachId}
-                            className={`w-full transition-opacity ${segIndex === 0 ? "rounded-t-[4px]" : ""}`}
+                            className={`w-full ${segIndex === 0 ? "rounded-t-[4px]" : ""}`}
                             style={{
                               height: segHeightPx,
                               backgroundColor: colorFor(seg.coachId),
-                              opacity: isSegHovered ? 1 : hovered && hovered.dayIndex === dayIndex ? 0.55 : 1,
                               marginBottom: segIndex < day.segments.length - 1 ? 1 : 0,
                             }}
-                            onMouseEnter={() => setHovered({ dayIndex, coachId: seg.coachId })}
-                            onMouseLeave={() => setHovered(null)}
-                            onFocus={() => setHovered({ dayIndex, coachId: seg.coachId })}
-                            onBlur={() => setHovered(null)}
-                            tabIndex={0}
-                            role="img"
-                            aria-label={`${seg.name}, ${formatShortDate(day.date)}: ${seg.count} llamada${seg.count === 1 ? "" : "s"}`}
                           />
                         );
                       })
