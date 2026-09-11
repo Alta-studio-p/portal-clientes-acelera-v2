@@ -39,8 +39,17 @@ export default async function AdminHomePage({
 
   const inProgressWithDates = clients
     .filter((c) => c.status === "active" || c.status === "extension")
-    .map((c) => ({ id: c.id, name: c.full_name || c.email, progress: getProgramProgress(c) }))
-    .filter((c): c is { id: string; name: string; progress: NonNullable<typeof c.progress> } => c.progress !== null)
+    .map((c) => ({
+      id: c.id,
+      name: c.full_name || c.email,
+      status: c.status,
+      startDate: c.start_date,
+      lastCallAt: c.last_call_at,
+      progress: getProgramProgress(c),
+    }))
+    .filter(
+      (c): c is typeof c & { progress: NonNullable<typeof c.progress> } => c.progress !== null
+    )
     .filter((c) => c.progress.percentElapsed < 100);
 
   // Lo que más le importa a Luciano: quién está más cerca de terminar su
@@ -52,19 +61,21 @@ export default async function AdminHomePage({
 
   // Distinto de "próximos a finalizar": esto es sobre cadencia semanal, no
   // sobre fecha final — un cliente puede ir bien de tiempo pero llevar
-  // semanas sin sesión, o viceversa.
-  const behindClients = clients
-    .filter((c) => c.status === "active" || c.status === "extension")
+  // semanas sin sesión, o viceversa. Solo clientes con progreso real
+  // configurado (start_date/end_date) — así se filtran los casos raros de
+  // datos (ej. un cliente con "1820 días sin llamada" y sin fechas de
+  // programa, que no es un caso de seguimiento real sino un dato roto).
+  const behindClients = inProgressWithDates
     .map((c) => ({
       id: c.id,
-      name: c.full_name || c.email,
-      coachNames: c.coach_names,
-      cadence: getCadenceStatus({ status: c.status, start_date: c.start_date, last_call_at: c.last_call_at }),
+      name: c.name,
+      status: c.status,
+      cadence: getCadenceStatus({ status: c.status, start_date: c.startDate, last_call_at: c.lastCallAt }),
     }))
     .filter((c) => c.cadence.behind)
     .sort((a, b) => (b.cadence.daysSinceLastCall ?? 0) - (a.cadence.daysSinceLastCall ?? 0))
-    .slice(0, 8)
-    .map((c) => ({ id: c.id, name: c.name, coachNames: c.coachNames, daysSinceLastCall: c.cadence.daysSinceLastCall ?? 0 }));
+    .slice(0, 16)
+    .map((c) => ({ id: c.id, name: c.name, daysSinceLastCall: c.cadence.daysSinceLastCall ?? 0 }));
 
   return (
     <div>
