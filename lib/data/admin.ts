@@ -173,85 +173,6 @@ export interface AdminCalendarDashboard {
   coaches: Pick<Coach, "id" | "full_name" | "email">[];
 }
 
-export interface AdminFathomCalendarCall
-  extends Pick<
-    Call,
-    "id" | "client_id" | "coach_id" | "title" | "display_title" | "started_at" | "duration_seconds" | "summary" | "recording_url" | "share_url"
-  > {
-  client: Pick<Client, "id" | "full_name" | "email" | "status"> | null;
-}
-
-export interface AdminFathomCalendarDashboard {
-  coaches: Pick<Coach, "id" | "full_name" | "email">[];
-  selectedCoach: Pick<Coach, "id" | "full_name" | "email"> | null;
-  calls: AdminFathomCalendarCall[];
-}
-
-export async function getAdminFathomCalendarDashboard({
-  from,
-  to,
-  coachId,
-}: {
-  from: string;
-  to: string;
-  coachId?: string;
-}): Promise<AdminFathomCalendarDashboard> {
-  const supabase = await createClient();
-
-  const { data: coachesData } = await supabase
-    .from("coaches")
-    .select("id, full_name, email")
-    .eq("is_active", true)
-    .order("full_name", { ascending: true });
-
-  const coaches = (coachesData ?? []) as Pick<Coach, "id" | "full_name" | "email">[];
-  const selectedCoach = coaches.find((coach) => coach.id === coachId) ?? coaches[0] ?? null;
-
-  if (!selectedCoach) {
-    return { coaches, selectedCoach: null, calls: [] };
-  }
-
-  const { data: callsData } = await supabase
-    .from("calls")
-    .select(
-      "id, client_id, coach_id, title, display_title, started_at, duration_seconds, summary, recording_url, share_url"
-    )
-    .eq("coach_id", selectedCoach.id)
-    .gte("started_at", from)
-    .lt("started_at", to)
-    .order("started_at", { ascending: true });
-
-  const calls = (callsData ?? []) as Pick<
-    Call,
-    "id" | "client_id" | "coach_id" | "title" | "display_title" | "started_at" | "duration_seconds" | "summary" | "recording_url" | "share_url"
-  >[];
-
-  const clientIds = Array.from(
-    new Set(calls.map((call) => call.client_id).filter(Boolean))
-  ) as string[];
-  const { data: clientsData } = clientIds.length
-    ? await supabase
-        .from("clients")
-        .select("id, full_name, email, status")
-        .in("id", clientIds)
-    : { data: [] };
-
-  const clientMap = new Map(
-    ((clientsData ?? []) as Pick<Client, "id" | "full_name" | "email" | "status">[]).map(
-      (client) => [client.id, client]
-    )
-  );
-
-  return {
-    coaches,
-    selectedCoach,
-    calls: calls.map((call) => ({
-      ...call,
-      client: call.client_id ? clientMap.get(call.client_id) ?? null : null,
-    })),
-  };
-}
-
 export async function getAdminCalendarDashboard({
   from,
   to,
@@ -505,5 +426,83 @@ export async function getAdminAnalytics({ days = 30 }: { days?: number }): Promi
       inactive: inactiveCount.count ?? 0,
     },
     totalCallsInRange: calls.length,
+  };
+}
+
+export interface MonthCalendarCall {
+  id: string;
+  coachId: string | null;
+  coachName: string;
+  clientId: string | null;
+  clientName: string | null;
+  title: string | null;
+  display_title: string | null;
+  summary: string | null;
+  started_at: string | null;
+  duration_seconds: number | null;
+  recording_url: string | null;
+  hasSummary: boolean;
+}
+
+export interface AdminMonthCalendar {
+  coaches: { coachId: string; name: string }[];
+  calls: MonthCalendarCall[];
+}
+
+// Todas las llamadas del mes, de todos los coaches a la vez (a diferencia de
+// getAdminFathomCalendarDashboard, que trae un coach a la vez) — para poder
+// mostrarlas todas juntas en el calendario tipo Google, con checkboxes por
+// coach que filtran del lado del cliente sin recargar.
+export async function getAdminMonthCalendar({
+  from,
+  to,
+}: {
+  from: string;
+  to: string;
+}): Promise<AdminMonthCalendar> {
+  const supabase = await createClient();
+
+  const [{ data: coachesData }, { data: callsData }] = await Promise.all([
+    supabase.from("coaches").select("id, full_name, email").eq("is_active", true).order("full_name", { ascending: true }),
+    supabase
+      .from("calls")
+      .select("id, client_id, coach_id, title, display_title, summary, started_at, duration_seconds, recording_url")
+      .gte("started_at", from)
+      .lt("started_at", to)
+      .order("started_at", { ascending: true }),
+  ]);
+
+  const coaches = (coachesData ?? []) as Pick<Coach, "id" | "full_name" | "email">[];
+  const calls = (callsData ?? []) as Pick<
+    Call,
+    "id" | "client_id" | "coach_id" | "title" | "display_title" | "summary" | "started_at" | "duration_seconds" | "recording_url"
+  >[];
+
+  const clientIds = Array.from(new Set(calls.map((c) => c.client_id).filter(Boolean))) as string[];
+  const { data: clientsData } = clientIds.length
+    ? await supabase.from("clients").select("id, full_name, email").in("id", clientIds)
+    : { data: [] };
+
+  const clientMap = new Map(
+    ((clientsData ?? []) as Pick<Client, "id" | "full_name" | "email">[]).map((c) => [c.id, c.full_name || c.email])
+  );
+  const coachMap = new Map(coaches.map((c) => [c.id, c.full_name || c.email]));
+
+  return {
+    coaches: coaches.map((c) => ({ coachId: c.id, name: c.full_name || c.email })),
+    calls: calls.map((c) => ({
+      id: c.id,
+      coachId: c.coach_id,
+      coachName: c.coach_id ? coachMap.get(c.coach_id) ?? "Sin coach" : "Sin coach",
+      clientId: c.client_id,
+      clientName: c.client_id ? clientMap.get(c.client_id) ?? null : null,
+      title: c.title,
+      display_title: c.display_title,
+      summary: c.summary,
+      started_at: c.started_at,
+      duration_seconds: c.duration_seconds,
+      recording_url: c.recording_url,
+      hasSummary: Boolean(c.summary),
+    })),
   };
 }
