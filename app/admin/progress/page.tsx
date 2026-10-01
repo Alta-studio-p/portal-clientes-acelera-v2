@@ -1,10 +1,40 @@
 import Link from "next/link";
-import { CheckCircle2 } from "lucide-react";
-import { getClientsList, getCoachesWithClients } from "@/lib/data/admin";
-import { PageHeader, StatCard, Card, EmptyState, SectionLabel } from "@/components/ui";
+import type { ReactNode } from "react";
+import { getClientsList, getCoachesWithClients, type ClientListRow } from "@/lib/data/admin";
+import { PageHeader, StatCard, EmptyState, SectionLabel } from "@/components/ui";
 import { ClientProgressRow } from "@/components/client-progress-timeline";
 import { getCadenceStatus, getProgramProgress } from "@/lib/program-dates";
-import { initials } from "@/lib/format";
+
+function KanbanColumn({
+  title,
+  count,
+  color,
+  children,
+}: {
+  title: string;
+  count: number;
+  color: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex w-[320px] shrink-0 flex-col rounded-xl bg-surface-muted/60 p-3">
+      <div className="mb-3 flex items-center justify-between px-1">
+        <div className="flex items-center gap-2">
+          <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: color }} aria-hidden="true" />
+          <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+        </div>
+        <span className="rounded-full bg-surface px-2 py-0.5 text-xs font-semibold text-muted-2">{count}</span>
+      </div>
+      <div className="flex flex-col gap-2.5">
+        {count === 0 ? (
+          <p className="px-1 text-xs text-muted-2">Sin clientes aquí.</p>
+        ) : (
+          children
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default async function AdminProgressPage({
   searchParams,
@@ -30,23 +60,37 @@ export default async function AdminProgressPage({
   const behindCount = withCadence.filter((c) => c.cadence.behind).length;
   const nearingEndCount = withCadence.filter((c) => c.progress && c.progress.daysRemaining <= 15).length;
 
-  const sorted = [...withCadence].sort((a, b) => {
-    if (a.cadence.behind !== b.cadence.behind) return a.cadence.behind ? -1 : 1;
-    const aRemaining = a.progress?.daysRemaining ?? Infinity;
-    const bRemaining = b.progress?.daysRemaining ?? Infinity;
-    return aRemaining - bRemaining;
-  });
+  const byRemaining = (a: (typeof withCadence)[number], b: (typeof withCadence)[number]) =>
+    (a.progress?.daysRemaining ?? Infinity) - (b.progress?.daysRemaining ?? Infinity);
 
-  // Un cliente con el programa al 100% ya terminó lo que tenía que hacer —
-  // se muestra aparte como lista, no como tarjeta de seguimiento activo.
-  const completed = sorted.filter((c) => c.progress?.percentElapsed === 100);
-  const inFlight = sorted.filter((c) => c.progress?.percentElapsed !== 100);
+  // Cuatro columnas, estilo Trello, cada cliente cae en exactamente una según
+  // su situación actual — el 100% manda primero (el programa ya se cumplió,
+  // sin importar la cadencia), después atrasados, después por terminar.
+  const completedColumn = withCadence.filter((c) => c.progress?.percentElapsed === 100).sort(byRemaining);
+  const behindColumn = withCadence
+    .filter((c) => c.progress?.percentElapsed !== 100 && c.cadence.behind)
+    .sort(byRemaining);
+  const nearingEndColumn = withCadence
+    .filter((c) => c.progress?.percentElapsed !== 100 && !c.cadence.behind && (c.progress?.daysRemaining ?? Infinity) <= 15)
+    .sort(byRemaining);
+  const onTrackColumn = withCadence
+    .filter(
+      (c) =>
+        c.progress?.percentElapsed !== 100 &&
+        !c.cadence.behind &&
+        (c.progress ? c.progress.daysRemaining > 15 : true)
+    )
+    .sort(byRemaining);
+
+  function renderCard({ client }: { client: ClientListRow }) {
+    return <ClientProgressRow key={client.id} client={client} href={`/admin/clients/${client.id}`} />;
+  }
 
   return (
     <div>
       <PageHeader
         title="Progreso de clientes"
-        description="Mapa visual de todos los programas en curso: sesiones que hubo, cuánto falta, y quién se atrasó."
+        description="Un tablero por categoría: quién está atrasado, quién está por terminar, y quién va bien."
       />
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -94,46 +138,25 @@ export default async function AdminProgressPage({
         )}
       </form>
 
-      {sorted.length === 0 ? (
+      {withCadence.length === 0 ? (
         <EmptyState title="Sin clientes en curso" description="Ajusta el filtro de coach." />
       ) : (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {inFlight.map(({ client }) => (
-              <ClientProgressRow key={client.id} client={client} href={`/admin/clients/${client.id}`} />
-            ))}
-          </div>
+        <div className="flex gap-4 overflow-x-auto pb-2">
+          <KanbanColumn title="Sin llamada esta semana" count={behindColumn.length} color="#d68552">
+            {behindColumn.map(renderCard)}
+          </KanbanColumn>
 
-          <Card className="h-fit p-4 lg:sticky lg:top-20">
-            <SectionLabel>Completados al 100% ({completed.length})</SectionLabel>
-            {completed.length === 0 ? (
-              <p className="text-sm text-muted-2">Ningún cliente en curso llegó al 100% todavía.</p>
-            ) : (
-              <ul className="space-y-1">
-                {completed.map(({ client }) => (
-                  <li key={client.id}>
-                    <Link
-                      href={`/admin/clients/${client.id}`}
-                      className="flex items-center gap-2.5 rounded-lg px-2 py-2 transition hover:bg-surface-muted"
-                    >
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[--status-active-bg] text-xs font-semibold text-[--status-active]">
-                        {initials(client.full_name, client.email)}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-                        {client.full_name || client.email}
-                      </span>
-                      <CheckCircle2
-                        size={16}
-                        strokeWidth={2}
-                        className="shrink-0 text-[--status-active]"
-                        aria-hidden="true"
-                      />
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
+          <KanbanColumn title="Por terminar pronto" count={nearingEndColumn.length} color="#d68552">
+            {nearingEndColumn.map(renderCard)}
+          </KanbanColumn>
+
+          <KanbanColumn title="En curso" count={onTrackColumn.length} color="#4c7c7e">
+            {onTrackColumn.map(renderCard)}
+          </KanbanColumn>
+
+          <KanbanColumn title="Completados al 100%" count={completedColumn.length} color="#1f7a4c">
+            {completedColumn.map(renderCard)}
+          </KanbanColumn>
         </div>
       )}
 
