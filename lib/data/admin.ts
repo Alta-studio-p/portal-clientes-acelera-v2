@@ -506,3 +506,32 @@ export async function getAdminMonthCalendar({
     })),
   };
 }
+
+export interface CoachCallCountForRange {
+  coachId: string;
+  name: string;
+  count: number;
+}
+
+// Conteo de llamadas por coach en un rango de fechas — para el reporte de
+// pago mensual en /admin/coaches (no confundir con getAdminAnalytics, que
+// trae el desglose día a día para la gráfica; acá solo hace falta el total).
+export async function getCoachCallCounts({ from, to }: { from: string; to: string }): Promise<CoachCallCountForRange[]> {
+  const supabase = await createClient();
+
+  const [{ data: coachesData }, { data: callsData }] = await Promise.all([
+    supabase.from("coaches").select("id, full_name, email").eq("is_active", true).order("full_name", { ascending: true }),
+    supabase.from("calls").select("coach_id").gte("started_at", from).lt("started_at", to),
+  ]);
+
+  const coaches = (coachesData ?? []) as Pick<Coach, "id" | "full_name" | "email">[];
+  const calls = (callsData ?? []) as { coach_id: string | null }[];
+
+  const counts = new Map<string, number>();
+  for (const call of calls) {
+    if (!call.coach_id) continue;
+    counts.set(call.coach_id, (counts.get(call.coach_id) ?? 0) + 1);
+  }
+
+  return coaches.map((c) => ({ coachId: c.id, name: c.full_name || c.email, count: counts.get(c.id) ?? 0 }));
+}
