@@ -16,6 +16,19 @@ const ONLY_SOURCE = (
 // corrida del import las vuelve a crear como cliente fantasma aunque se
 // borren a mano (ver "Susannah Durant").
 const EXCLUDED_EMAIL_DOMAINS = ["fathom.video"];
+// Correos de agenda/genéricos que Fathom a veces mete como invitado junto al
+// cliente real (ver README, sección "Cuentas fantasma detectadas"). Si no se
+// excluyen acá, primaryClientCandidate() los puede tomar como "el cliente" de
+// la llamada en vez de a la persona real — y como el import corre todas las
+// noches con 14 días de backfill, revierte cualquier corrección manual hecha
+// directo en Supabase para esas llamadas.
+const EXCLUDED_EMAILS = [
+  "mari.aceleratalent@gmail.com",
+  "rlconsultalent@gmail.com",
+  "rosa.aceleratalent@gmail.com",
+  "alex.vega@cmglobalconsulting.com",
+  "jonathan.aceleratalent@gmail.com",
+];
 const DEMO_TITLE_PATTERN = /^fathom demo$/i;
 
 loadEnv(".env.local");
@@ -155,7 +168,8 @@ function externalInvitees(meeting) {
       (invitee) =>
         invitee.email &&
         invitee.domain !== INTERNAL_DOMAIN &&
-        !EXCLUDED_EMAIL_DOMAINS.includes(invitee.domain)
+        !EXCLUDED_EMAIL_DOMAINS.includes(invitee.domain) &&
+        !EXCLUDED_EMAILS.includes(invitee.email)
     );
 }
 
@@ -271,12 +285,29 @@ async function upsertClient(candidate) {
   return rows[0] || null;
 }
 
+async function findCallByFathomId(fathomCallId) {
+  const rows = await sb(`calls?select=id,client_id&fathom_call_id=eq.${encodeURIComponent(fathomCallId)}&limit=1`);
+  return rows[0] || null;
+}
+
 async function upsertCall(row) {
   if (!APPLY) return null;
+
+  // Si la llamada ya existe y ya tiene cliente asignado, no se lo pisamos —
+  // el importador solo decide el cliente la primera vez que ve la llamada.
+  // Sin esto, una corrección manual (ej. reasignar una llamada mal atribuida
+  // a una cuenta fantasma) se revierte sola la próxima vez que esta llamada
+  // caiga dentro de la ventana de backfill del cron nocturno.
+  const existing = await findCallByFathomId(row.fathom_call_id);
+  const payload = { ...row };
+  if (existing?.client_id) {
+    delete payload.client_id;
+  }
+
   const rows = await sb("calls?on_conflict=fathom_call_id", {
     method: "POST",
     headers: { Prefer: "resolution=merge-duplicates,return=representation" },
-    body: JSON.stringify(row),
+    body: JSON.stringify(payload),
   });
   return rows[0] || null;
 }
@@ -408,8 +439,13 @@ async function main() {
       if (APPLY) {
         stats.imported += 1;
         await upsertParticipants(savedCall?.id, meeting);
-        if (coach?.id && row.client_id) {
-          await ensureAssignment(coach.id, row.client_id);
+        // Usar el client_id que realmente quedó en la fila (puede ser el que
+        // ya tenía antes, preservado por upsertCall), no el que se acaba de
+        // adivinar — evita crear asignaciones coach-cliente con un cliente
+        // equivocado.
+        const finalClientId = savedCall?.client_id ?? row.client_id;
+        if (coach?.id && finalClientId) {
+          await ensureAssignment(coach.id, finalClientId);
           stats.assignments += 1;
         }
       }
