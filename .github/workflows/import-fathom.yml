@@ -4,7 +4,12 @@ on:
   schedule:
     # 20:00 hora Colombia/México (UTC-5) = 01:00 UTC del día siguiente
     - cron: "0 1 * * *"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      backfill_days:
+        description: "Backfill profundo (días hacia atrás) para TODAS las fuentes en esta corrida manual. Vacío = 14 (el default de siempre)."
+        required: false
+        default: ""
 
 jobs:
   import:
@@ -18,11 +23,11 @@ jobs:
       FATHOM_SOURCE_ALEX_API_KEY: ${{ secrets.FATHOM_SOURCE_ALEX_API_KEY }}
       FATHOM_SOURCE_JOTA_API_KEY: ${{ secrets.FATHOM_SOURCE_JOTA_API_KEY }}
       FATHOM_SOURCE_LORENA_API_KEY: ${{ secrets.FATHOM_SOURCE_LORENA_API_KEY }}
-      BACKFILL_SOURCE_MARI_DAYS: "14"
-      BACKFILL_SOURCE_ROSS_DAYS: "14"
-      BACKFILL_SOURCE_ALEX_DAYS: "14"
-      BACKFILL_SOURCE_JOTA_DAYS: "14"
-      BACKFILL_SOURCE_LORENA_DAYS: "14"
+      BACKFILL_SOURCE_MARI_DAYS: ${{ github.event.inputs.backfill_days || '14' }}
+      BACKFILL_SOURCE_ROSS_DAYS: ${{ github.event.inputs.backfill_days || '14' }}
+      BACKFILL_SOURCE_ALEX_DAYS: ${{ github.event.inputs.backfill_days || '14' }}
+      BACKFILL_SOURCE_JOTA_DAYS: ${{ github.event.inputs.backfill_days || '14' }}
+      BACKFILL_SOURCE_LORENA_DAYS: ${{ github.event.inputs.backfill_days || '14' }}
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
       OPENROUTER_BASE_URL: ${{ secrets.OPENROUTER_BASE_URL }}
