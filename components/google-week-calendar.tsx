@@ -7,7 +7,7 @@ import type { MonthCalendarCall } from "@/lib/data/admin";
 import { displayCallTitle } from "@/lib/call-title";
 
 const TIME_ZONE = "America/Bogota";
-const HOUR_HEIGHT = 56; // px
+const HOUR_HEIGHT = 72; // px
 const DAY_LABELS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 const COLOR_VARS = [
   "var(--chart-1)",
@@ -209,15 +209,15 @@ export function GoogleWeekCalendar({
       </div>
 
       <div className="min-w-0 flex-1">
-        <div className="min-w-[640px]">
+        <div className="min-w-[760px]">
           {/* Encabezado: días de la semana */}
-          <div className="grid" style={{ gridTemplateColumns: "48px repeat(7, 1fr)" }}>
+          <div className="grid" style={{ gridTemplateColumns: "64px repeat(7, 1fr)" }}>
             <div />
             {days.map((day, i) => (
               <div key={day.dateKey} className="flex flex-col items-center border-b border-border pb-2">
-                <span className="text-[11px] font-medium uppercase text-muted-2">{DAY_LABELS[i]}</span>
+                <span className="text-sm font-medium uppercase text-muted-2">{DAY_LABELS[i]}</span>
                 <span
-                  className={`mt-0.5 flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold ${
+                  className={`mt-0.5 flex h-9 w-9 items-center justify-center rounded-full text-base font-semibold ${
                     day.isToday ? "bg-accent text-white" : "text-foreground"
                   }`}
                 >
@@ -228,12 +228,12 @@ export function GoogleWeekCalendar({
           </div>
 
           {/* Grid de horas */}
-          <div className="grid" style={{ gridTemplateColumns: "48px repeat(7, 1fr)" }}>
+          <div className="grid" style={{ gridTemplateColumns: "64px repeat(7, 1fr)" }}>
             <div className="relative" style={{ height: totalHours * HOUR_HEIGHT }}>
               {hours.map((h) => (
                 <div
                   key={h}
-                  className="absolute right-2 -translate-y-1/2 text-right text-[10px] text-muted-2"
+                  className="absolute right-2 -translate-y-1/2 text-right text-xs font-medium text-muted-2"
                   style={{ top: (h - rangeStart) * HOUR_HEIGHT }}
                 >
                   {formatHourLabel(h)}
@@ -260,7 +260,7 @@ export function GoogleWeekCalendar({
                   {dayEvents.map((ev) => {
                     const color = colorFor(ev.coachId);
                     const top = Math.max(0, (ev.start - rangeStart) * HOUR_HEIGHT);
-                    const height = Math.max(20, (ev.end - ev.start) * HOUR_HEIGHT - 2);
+                    const height = Math.max(26, (ev.end - ev.start) * HOUR_HEIGHT - 2);
                     const widthPct = 100 / ev.lanes;
                     return (
                       <div
@@ -271,7 +271,7 @@ export function GoogleWeekCalendar({
                         <button
                           type="button"
                           onClick={() => setOpenCallId(openCallId === ev.id ? null : ev.id)}
-                          className="h-full w-full overflow-hidden rounded-[4px] border-l-[3px] px-1.5 py-0.5 text-left text-[10px] leading-tight transition hover:brightness-95"
+                          className="h-full w-full overflow-hidden rounded-[4px] border-l-[3px] px-1.5 py-0.5 text-left text-xs leading-tight transition hover:brightness-95"
                           style={{ backgroundColor: `${color}1f`, borderLeftColor: color, color: "var(--foreground)" }}
                         >
                           <span className="font-semibold tabular-nums" style={{ color }}>
@@ -302,14 +302,14 @@ function CallPopover({ call, color, onClose }: { call: MonthCalendarCall; color:
       <div className="mb-2 flex items-start justify-between gap-2">
         <div className="flex items-start gap-2">
           <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: color }} aria-hidden="true" />
-          <h3 className="text-sm font-semibold leading-snug text-foreground">{displayCallTitle(call)}</h3>
+          <h3 className="text-base font-semibold leading-snug text-foreground">{displayCallTitle(call)}</h3>
         </div>
-        <button type="button" onClick={onClose} className="shrink-0 text-xs text-muted-2 hover:text-foreground">
+        <button type="button" onClick={onClose} className="shrink-0 text-sm text-muted-2 hover:text-foreground">
           ✕
         </button>
       </div>
 
-      <div className="space-y-1.5 border-y border-border py-2.5 text-xs">
+      <div className="space-y-1.5 border-y border-border py-2.5 text-sm">
         <p className="text-muted">{dateTimeLabel(call.started_at)}</p>
         <p className="text-muted">
           <span className="font-medium text-foreground">{call.coachName}</span>
@@ -322,7 +322,7 @@ function CallPopover({ call, color, onClose }: { call: MonthCalendarCall; color:
         {call.clientId && (
           <Link
             href={`/admin/clients/${call.clientId}?call=${call.id}`}
-            className="rounded-md bg-accent px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-accent-hover"
+            className="rounded-md bg-accent px-2.5 py-1.5 text-sm font-semibold text-white hover:bg-accent-hover"
           >
             Ver resumen
           </Link>
@@ -332,7 +332,7 @@ function CallPopover({ call, color, onClose }: { call: MonthCalendarCall; color:
             href={call.recording_url}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-xs font-semibold text-foreground hover:bg-surface-muted"
+            className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-sm font-semibold text-foreground hover:bg-surface-muted"
           >
             <Play size={12} strokeWidth={2} aria-hidden="true" /> Grabación
             <ExternalLink size={11} strokeWidth={2} aria-hidden="true" />
