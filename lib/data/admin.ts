@@ -83,7 +83,7 @@ export async function getClientsList(filters: {
       where call.client_id = c.id
     ) client_calls on true
     ${where}
-    order by c.full_name nulls last, c.email`,
+    order by c.start_date asc nulls last, c.full_name nulls last, c.email`,
     values
   );
 

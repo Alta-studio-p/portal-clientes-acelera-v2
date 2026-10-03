@@ -35,6 +35,10 @@ function startLabel(client: ClientListRow) {
   return client.start_date ? formatDate(client.start_date) : "Sin datos";
 }
 
+function byEntryDate(a: ClientWithProgress, b: ClientWithProgress) {
+  return (a.client.start_date ?? "9999-12-31").localeCompare(b.client.start_date ?? "9999-12-31");
+}
+
 function progressValue(item: ClientWithProgress, completed: boolean) {
   return completed ? 100 : item.progress?.percentElapsed ?? null;
 }
@@ -169,15 +173,10 @@ export default async function AdminProgressPage({
   // ni mover a un cliente de la lista maestra.
   const completed = clients
     .filter((item) => item.progress !== null && item.progress.daysRemaining <= 0)
-    .sort((a, b) => (b.client.end_date ?? "").localeCompare(a.client.end_date ?? ""));
+    .sort(byEntryDate);
   const active = clients
     .filter((item) => !completed.includes(item))
-    .sort((a, b) => {
-      const aGroup = a.cadence.behind ? 0 : (a.progress?.daysRemaining ?? Infinity) <= 15 ? 1 : 2;
-      const bGroup = b.cadence.behind ? 0 : (b.progress?.daysRemaining ?? Infinity) <= 15 ? 1 : 2;
-      if (aGroup !== bGroup) return aGroup - bGroup;
-      return (a.progress?.daysRemaining ?? Infinity) - (b.progress?.daysRemaining ?? Infinity);
-    });
+    .sort(byEntryDate);
 
   const requiringAttention = active.filter((item) => item.cadence.behind).length;
   const nearingEnd = active.filter((item) => (item.progress?.daysRemaining ?? Infinity) <= 15).length;
@@ -189,7 +188,7 @@ export default async function AdminProgressPage({
     <div>
       <PageHeader
         title="Progreso de clientes"
-        description="Una vista compacta para revisar la operación por coach y detectar prioridades."
+        description="Ordenado por fecha de entrada: la primera llamada registrada de cada cliente."
       />
 
       <div className="mb-6 grid overflow-hidden rounded-xl border border-border bg-surface sm:grid-cols-4 sm:divide-x sm:divide-border">
