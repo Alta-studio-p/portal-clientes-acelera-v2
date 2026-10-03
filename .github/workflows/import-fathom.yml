@@ -34,6 +34,7 @@ jobs:
       LLM_BASE_URL: ${{ secrets.LLM_BASE_URL }}
       OPENROUTER_MODEL: ${{ secrets.OPENROUTER_MODEL }}
       LLM_MODEL: ${{ secrets.LLM_MODEL }}
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
     steps:
       - uses: actions/checkout@v4
 
@@ -66,3 +67,10 @@ jobs:
         if: ${{ env.OPENROUTER_API_KEY != '' || env.LLM_API_KEY != '' }}
         continue-on-error: true
         run: node scripts/enrich-salary-range.mjs --apply
+
+      - name: Sincroniza Supabase hacia Neon
+        run: >-
+          curl --fail --silent --show-error
+          --request POST
+          --header "Authorization: Bearer $CRON_SECRET"
+          https://portal-clientes-acelera-v2.vercel.app/api/internal/sync-supabase-neon

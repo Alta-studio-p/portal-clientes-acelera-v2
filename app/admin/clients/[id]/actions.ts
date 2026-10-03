@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth";
+import { getSql } from "@/lib/db";
 import { createAdminClient } from "@/lib/supabase/server";
 import type { ClientStatus } from "@/lib/supabase/types";
 
@@ -49,16 +50,21 @@ export async function saveClientDriveFolder(formData: FormData) {
     redirect(clientPath(clientId, { drive: "invalid" }));
   }
 
-  const supabase = await createAdminClient();
-  const { error } = await supabase
-    .from("clients")
-    .update({
-      drive_folder_id: folderId,
-      drive_folder_url: folderUrl(folderId),
-    })
-    .eq("id", clientId);
+  try {
+    const supabase = await createAdminClient();
+    const { error } = await supabase
+      .from("clients")
+      .update({ drive_folder_id: folderId, drive_folder_url: folderUrl(folderId) })
+      .eq("id", clientId);
+    if (error) throw error;
 
-  if (error) {
+    const sql = getSql();
+    await sql`
+      update public.clients
+      set drive_folder_id = ${folderId}, drive_folder_url = ${folderUrl(folderId)}, updated_at = now()
+      where id = ${clientId}::uuid
+    `;
+  } catch {
     redirect(clientPath(clientId, { drive: "error" }));
   }
 
@@ -72,16 +78,21 @@ export async function removeClientDriveFolder(formData: FormData) {
   const clientId = String(formData.get("clientId") ?? "");
   if (!clientId) redirect("/admin/clients");
 
-  const supabase = await createAdminClient();
-  const { error } = await supabase
-    .from("clients")
-    .update({
-      drive_folder_id: null,
-      drive_folder_url: null,
-    })
-    .eq("id", clientId);
+  try {
+    const supabase = await createAdminClient();
+    const { error } = await supabase
+      .from("clients")
+      .update({ drive_folder_id: null, drive_folder_url: null })
+      .eq("id", clientId);
+    if (error) throw error;
 
-  if (error) {
+    const sql = getSql();
+    await sql`
+      update public.clients
+      set drive_folder_id = null, drive_folder_url = null, updated_at = now()
+      where id = ${clientId}::uuid
+    `;
+  } catch {
     redirect(clientPath(clientId, { drive: "error" }));
   }
 
@@ -99,10 +110,18 @@ export async function updateClientStatus(formData: FormData) {
     redirect(clientPath(clientId, { status: "invalid" }));
   }
 
-  const supabase = await createAdminClient();
-  const { error } = await supabase.from("clients").update({ status }).eq("id", clientId);
+  try {
+    const supabase = await createAdminClient();
+    const { error } = await supabase.from("clients").update({ status }).eq("id", clientId);
+    if (error) throw error;
 
-  if (error) {
+    const sql = getSql();
+    await sql`
+      update public.clients
+      set status = ${status}, updated_at = now()
+      where id = ${clientId}::uuid
+    `;
+  } catch {
     redirect(clientPath(clientId, { status: "error" }));
   }
 

@@ -1,4 +1,6 @@
-import { createClient } from "@/lib/supabase/server";
+import "server-only";
+
+import { getSql } from "@/lib/db";
 import type { ClientStatus } from "@/lib/supabase/types";
 
 export interface CoachClientRow {
@@ -14,49 +16,25 @@ export interface CoachClientRow {
 }
 
 export async function getClientsForCoach(coachId: string): Promise<CoachClientRow[]> {
-  const supabase = await createClient();
+  const sql = getSql();
+  const rows = await sql`
+    select
+      c.id::text,
+      c.full_name,
+      c.email,
+      c.status,
+      c.start_date::text,
+      c.end_date::text,
+      a.is_primary,
+      count(calls.id)::int as call_count,
+      max(calls.started_at)::text as last_call_at
+    from public.coach_client_assignments a
+    join public.clients c on c.id = a.client_id
+    left join public.calls calls on calls.client_id = c.id
+    where a.coach_id = ${coachId}::uuid
+    group by c.id, a.is_primary
+    order by coalesce(c.full_name, c.email)
+  `;
 
-  const { data, error } = await supabase
-    .from("coach_client_assignments")
-    .select(
-      "is_primary, clients ( id, full_name, email, status, start_date, end_date, calls!calls_client_id_fkey ( id, started_at ) )"
-    )
-    .eq("coach_id", coachId);
-
-  if (error || !data) return [];
-
-  type Row = {
-    is_primary: boolean;
-    clients: {
-      id: string;
-      full_name: string | null;
-      email: string;
-      status: ClientStatus;
-      start_date: string | null;
-      end_date: string | null;
-      calls: { id: string; started_at: string | null }[];
-    } | null;
-  };
-
-  return (data as unknown as Row[])
-    .filter((r) => r.clients)
-    .map((r) => {
-      const calls = r.clients!.calls ?? [];
-      const lastCall = calls
-        .filter((c) => c.started_at)
-        .sort((a, b) => (b.started_at! > a.started_at! ? 1 : -1))[0];
-
-      return {
-        id: r.clients!.id,
-        full_name: r.clients!.full_name,
-        email: r.clients!.email,
-        status: r.clients!.status,
-        start_date: r.clients!.start_date,
-        end_date: r.clients!.end_date,
-        is_primary: r.is_primary,
-        call_count: calls.length,
-        last_call_at: lastCall?.started_at ?? null,
-      };
-    })
-    .sort((a, b) => (a.full_name ?? a.email).localeCompare(b.full_name ?? b.email));
+  return rows as unknown as CoachClientRow[];
 }

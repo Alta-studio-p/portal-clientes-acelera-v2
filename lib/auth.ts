@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getSql } from "@/lib/db";
 import type { Profile } from "@/lib/supabase/types";
 
 export async function getSessionProfile(): Promise<{
@@ -14,16 +15,19 @@ export async function getSessionProfile(): Promise<{
 
   if (!user) return null;
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id, email, full_name, role")
-    .eq("id", user.id)
-    .maybeSingle();
+  const sql = getSql();
+  const profiles = await sql`
+    select id::text, email, full_name, role
+    from public.profiles
+    where id = ${user.id}::uuid
+    limit 1
+  `;
+  const profile = (profiles[0] as unknown as Profile | undefined) ?? null;
 
   return {
     userId: user.id,
     email: user.email ?? "",
-    profile: profile as Profile | null,
+    profile,
   };
 }
 

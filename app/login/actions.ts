@@ -2,7 +2,9 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getSql } from "@/lib/db";
 import { roleHome } from "@/lib/auth";
+import type { Profile } from "@/lib/supabase/types";
 
 export type LoginState = { error: string | null };
 
@@ -38,11 +40,14 @@ export async function loginAction(
     return { error: "Usuario o contraseña incorrectos." };
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", data.user.id)
-    .maybeSingle();
+  const sql = getSql();
+  const profiles = await sql`
+    select id::text, email, full_name, role
+    from public.profiles
+    where id = ${data.user.id}::uuid
+    limit 1
+  `;
+  const profile = profiles[0] as unknown as Profile | undefined;
 
   if (!profile) {
     return {

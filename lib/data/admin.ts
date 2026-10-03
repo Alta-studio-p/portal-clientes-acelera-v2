@@ -1,4 +1,6 @@
-import { createClient } from "@/lib/supabase/server";
+import "server-only";
+
+import { getSql } from "@/lib/db";
 import type { CalendarEvent, Call, Client, Coach, ClientStatus } from "@/lib/supabase/types";
 
 export interface AdminCounts {
@@ -10,26 +12,16 @@ export interface AdminCounts {
 }
 
 export async function getAdminCounts(): Promise<AdminCounts> {
-  const supabase = await createClient();
-
-  const [clients, coaches, calls, callsWithSummary, clientsWithContext] = await Promise.all([
-    supabase.from("clients").select("id", { count: "exact", head: true }),
-    supabase.from("coaches").select("id", { count: "exact", head: true }),
-    supabase.from("calls").select("id", { count: "exact", head: true }),
-    supabase.from("calls").select("id", { count: "exact", head: true }).not("summary", "is", null),
-    supabase
-      .from("clients")
-      .select("id", { count: "exact", head: true })
-      .not("context_summary", "is", null),
-  ]);
-
-  return {
-    clients: clients.count ?? 0,
-    coaches: coaches.count ?? 0,
-    calls: calls.count ?? 0,
-    callsWithSummary: callsWithSummary.count ?? 0,
-    clientsWithContext: clientsWithContext.count ?? 0,
-  };
+  const sql = getSql();
+  const [counts] = await sql`
+    select
+      (select count(*)::int from public.clients) as clients,
+      (select count(*)::int from public.coaches) as coaches,
+      (select count(*)::int from public.calls) as calls,
+      (select count(*)::int from public.calls where summary is not null) as "callsWithSummary",
+      (select count(*)::int from public.clients where context_summary is not null) as "clientsWithContext"
+  `;
+  return counts as unknown as AdminCounts;
 }
 
 export interface ClientListRow extends Client {
@@ -44,54 +36,58 @@ export async function getClientsList(filters: {
   status?: ClientStatus;
   search?: string;
 }): Promise<ClientListRow[]> {
-  const supabase = await createClient();
+  const sql = getSql();
+  const conditions: string[] = [];
+  const values: unknown[] = [];
 
-  let query = supabase
-    .from("clients")
-    .select(
-      `id, profile_id, email, full_name, status, drive_folder_url, drive_folder_id, first_call_id, context_summary, context_source_call_id, context_generated_at, notes, start_date, end_date,
-       coach_client_assignments ( coach_id, is_primary, coaches ( id, full_name, email ) ),
-       calls!calls_client_id_fkey ( id, started_at )`
-    )
-    .order("full_name", { ascending: true });
-
-  if (filters.status) query = query.eq("status", filters.status);
+  if (filters.status) {
+    values.push(filters.status);
+    conditions.push(`c.status = $${values.length}`);
+  }
   if (filters.search) {
-    query = query.or(`full_name.ilike.%${filters.search}%,email.ilike.%${filters.search}%`);
+    values.push(`%${filters.search}%`);
+    conditions.push(`(c.full_name ilike $${values.length} or c.email ilike $${values.length})`);
+  }
+  if (filters.coachId) {
+    values.push(filters.coachId);
+    conditions.push(`exists (
+      select 1 from public.coach_client_assignments filter_assignment
+      where filter_assignment.client_id = c.id and filter_assignment.coach_id = $${values.length}::uuid
+    )`);
   }
 
-  const { data, error } = await query;
-  if (error || !data) return [];
+  const where = conditions.length > 0 ? `where ${conditions.join(" and ")}` : "";
+  const rows = await sql.query(
+    `select
+      c.id::text, c.profile_id::text, c.email, c.full_name, c.status,
+      c.drive_folder_url, c.drive_folder_id, c.first_call_id::text, c.context_summary,
+      c.context_source_call_id::text, c.context_generated_at::text, c.notes,
+      c.desired_salary_range, c.start_date::text, c.end_date::text,
+      coalesce(assignments.coach_names, '{}') as coach_names,
+      coalesce(client_calls.call_count, 0)::int as call_count,
+      client_calls.last_call_at,
+      coalesce(client_calls.calls, '[]'::jsonb) as calls
+    from public.clients c
+    left join lateral (
+      select array_agg(coalesce(coach.full_name, coach.email) order by coalesce(coach.full_name, coach.email)) as coach_names
+      from public.coach_client_assignments assignment
+      join public.coaches coach on coach.id = assignment.coach_id
+      where assignment.client_id = c.id
+    ) assignments on true
+    left join lateral (
+      select
+        count(*)::int as call_count,
+        max(call.started_at)::text as last_call_at,
+        jsonb_agg(jsonb_build_object('id', call.id::text, 'started_at', call.started_at::text) order by call.started_at) as calls
+      from public.calls call
+      where call.client_id = c.id
+    ) client_calls on true
+    ${where}
+    order by c.full_name nulls last, c.email`,
+    values
+  );
 
-  type Row = Client & {
-    coach_client_assignments: { coach_id: string; is_primary: boolean; coaches: { id: string; full_name: string | null; email: string } | null }[];
-    calls: { id: string; started_at: string | null }[];
-  };
-
-  const rows = data as unknown as Row[];
-
-  const mapped = rows.map((row) => {
-    const calls = row.calls ?? [];
-    const lastCall = calls
-      .filter((c) => c.started_at)
-      .sort((a, b) => (b.started_at! > a.started_at! ? 1 : -1))[0];
-
-    return {
-      ...row,
-      coach_names: (row.coach_client_assignments ?? [])
-        .map((a) => a.coaches?.full_name || a.coaches?.email)
-        .filter((n): n is string => Boolean(n)),
-      call_count: calls.length,
-      last_call_at: lastCall?.started_at ?? null,
-      _coach_ids: (row.coach_client_assignments ?? []).map((a) => a.coach_id),
-    };
-  });
-
-  const filtered = filters.coachId
-    ? mapped.filter((row) => row._coach_ids.includes(filters.coachId as string))
-    : mapped;
-
-  return filtered as unknown as ClientListRow[];
+  return rows as unknown as ClientListRow[];
 }
 
 export interface CoachWithClients extends Coach {
@@ -106,47 +102,46 @@ export interface CoachWithClients extends Coach {
 }
 
 export async function getCoachesWithClients(): Promise<CoachWithClients[]> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("coaches")
-    .select(
-      `id, profile_id, email, full_name, fathom_source_key, calendar_source_key, is_active,
-       coach_client_assignments ( is_primary, clients ( id, full_name, email, status, end_date ) )`
-    )
-    .order("full_name", { ascending: true });
-
-  if (error || !data) return [];
-
-  type Row = Coach & {
-    coach_client_assignments: {
-      is_primary: boolean;
-      clients: { id: string; full_name: string | null; email: string; status: ClientStatus; end_date: string | null } | null;
-    }[];
-  };
-
-  return (data as unknown as Row[]).map((row) => ({
-    ...row,
-    clients: (row.coach_client_assignments ?? [])
-      .filter((a) => a.clients)
-      .map((a) => ({ ...(a.clients as NonNullable<typeof a.clients>), is_primary: a.is_primary })),
-  }));
+  const sql = getSql();
+  const rows = await sql`
+    select
+      coach.id::text, coach.profile_id::text, coach.email, coach.full_name,
+      coach.fathom_source_key, coach.calendar_source_key, coach.is_active,
+      coalesce(
+        jsonb_agg(
+          jsonb_build_object(
+            'id', client.id::text,
+            'full_name', client.full_name,
+            'email', client.email,
+            'status', client.status,
+            'end_date', client.end_date::text,
+            'is_primary', assignment.is_primary
+          ) order by coalesce(client.full_name, client.email)
+        ) filter (where client.id is not null),
+        '[]'::jsonb
+      ) as clients
+    from public.coaches coach
+    left join public.coach_client_assignments assignment on assignment.coach_id = coach.id
+    left join public.clients client on client.id = assignment.client_id
+    group by coach.id
+    order by coach.full_name nulls last, coach.email
+  `;
+  return rows as unknown as CoachWithClients[];
 }
 
 export async function getCallsNeedingAttention(): Promise<Call[]> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("calls")
-    .select(
-      "id, client_id, coach_id, source, fathom_call_id, title, display_title, started_at, duration_seconds, summary, next_steps, recording_url, share_url, calendar_event_id, raw_metadata"
-    )
-    .or("summary.is.null,client_id.is.null")
-    .order("started_at", { ascending: false })
-    .limit(50);
-
-  if (error || !data) return [];
-  return data as Call[];
+  const sql = getSql();
+  const rows = await sql`
+    select
+      id::text, client_id::text, coach_id::text, source, fathom_call_id, title, display_title,
+      started_at::text, duration_seconds, summary, next_steps, recording_url, share_url,
+      calendar_event_id::text, raw_metadata
+    from public.calls
+    where summary is null or client_id is null
+    order by started_at desc nulls last
+    limit 50
+  `;
+  return rows as unknown as Call[];
 }
 
 export interface AdminCalendarEvent extends CalendarEvent {
@@ -182,144 +177,73 @@ export async function getAdminCalendarDashboard({
   to: string;
   coachId?: string;
 }): Promise<AdminCalendarDashboard> {
-  const supabase = await createClient();
+  const sql = getSql();
+  const coachFilter = coachId ? "and source.coach_id = $3::uuid" : "";
+  const params = coachId ? [from, to, coachId] : [from, to];
 
-  const coachesQuery = supabase
-    .from("coaches")
-    .select("id, full_name, email")
-    .eq("is_active", true)
-    .order("full_name", { ascending: true });
-
-  let eventsQuery = supabase
-    .from("calendar_events")
-    .select("*")
-    .gte("starts_at", from)
-    .lt("starts_at", to)
-    .order("starts_at", { ascending: true });
-
-  let callsQuery = supabase
-    .from("calls")
-    .select(
-      "id, client_id, coach_id, source, fathom_call_id, title, display_title, started_at, duration_seconds, summary, next_steps, recording_url, share_url, calendar_event_id, raw_metadata"
-    )
-    .gte("started_at", from)
-    .lt("started_at", to)
-    .order("started_at", { ascending: true });
-
-  if (coachId) {
-    eventsQuery = eventsQuery.eq("coach_id", coachId);
-    callsQuery = callsQuery.eq("coach_id", coachId);
-  }
-
-  const [{ data: coachesData }, { data: eventsData }, { data: callsData }] = await Promise.all([
-    coachesQuery,
-    eventsQuery,
-    callsQuery,
+  const [coaches, eventRows, callRows] = await Promise.all([
+    sql`
+      select id::text, full_name, email
+      from public.coaches
+      where is_active = true
+      order by full_name nulls last, email
+    `,
+    sql.query(
+      `select
+        source.id::text, source.coach_id::text, source.client_id::text, source.google_event_id,
+        source.google_calendar_id, source.title, source.description, source.starts_at::text,
+        source.ends_at::text, source.attendee_emails, source.status, source.matched_call_id::text,
+        source.ignored_reason, source.raw_metadata,
+        case when coach.id is null then null else jsonb_build_object(
+          'id', coach.id::text, 'full_name', coach.full_name, 'email', coach.email
+        ) end as coach,
+        case when client.id is null then null else jsonb_build_object(
+          'id', client.id::text, 'full_name', client.full_name, 'email', client.email, 'status', client.status
+        ) end as client,
+        case when matched.id is null then null else jsonb_build_object(
+          'id', matched.id::text, 'client_id', matched.client_id::text, 'coach_id', matched.coach_id::text,
+          'title', matched.title, 'display_title', matched.display_title, 'started_at', matched.started_at::text,
+          'summary', matched.summary, 'recording_url', matched.recording_url, 'share_url', matched.share_url,
+          'calendar_event_id', matched.calendar_event_id::text
+        ) end as "matchedCall"
+      from public.calendar_events source
+      left join public.coaches coach on coach.id = source.coach_id
+      left join public.clients client on client.id = source.client_id
+      left join public.calls matched on matched.id = source.matched_call_id
+      where source.starts_at >= $1::timestamptz and source.starts_at < $2::timestamptz ${coachFilter}
+      order by source.starts_at`,
+      params
+    ),
+    sql.query(
+      `select
+        source.id::text, source.client_id::text, source.coach_id::text, source.title,
+        source.display_title, source.started_at::text, source.summary, source.recording_url,
+        source.share_url, source.calendar_event_id::text,
+        case when coach.id is null then null else jsonb_build_object(
+          'id', coach.id::text, 'full_name', coach.full_name, 'email', coach.email
+        ) end as coach,
+        case when client.id is null then null else jsonb_build_object(
+          'id', client.id::text, 'full_name', client.full_name, 'email', client.email, 'status', client.status
+        ) end as client
+      from public.calls source
+      left join public.coaches coach on coach.id = source.coach_id
+      left join public.clients client on client.id = source.client_id
+      where source.started_at >= $1::timestamptz and source.started_at < $2::timestamptz ${coachFilter}
+      order by source.started_at`,
+      params
+    ),
   ]);
 
-  const coaches = (coachesData ?? []) as Pick<Coach, "id" | "full_name" | "email">[];
-  const events = (eventsData ?? []) as CalendarEvent[];
-  const calls = (callsData ?? []) as Call[];
-
-  const coachIds = new Set<string>();
-  const clientIds = new Set<string>();
-  const matchedCallIds = new Set<string>();
-
-  for (const event of events) {
-    if (event.coach_id) coachIds.add(event.coach_id);
-    if (event.client_id) clientIds.add(event.client_id);
-    if (event.matched_call_id) matchedCallIds.add(event.matched_call_id);
-  }
-
-  for (const call of calls) {
-    if (call.coach_id) coachIds.add(call.coach_id);
-    if (call.client_id) clientIds.add(call.client_id);
-  }
-
-  const [{ data: relatedCoaches }, { data: relatedClients }, { data: matchedCalls }] =
-    await Promise.all([
-      coachIds.size
-        ? supabase
-            .from("coaches")
-            .select("id, full_name, email")
-            .in("id", Array.from(coachIds))
-        : Promise.resolve({ data: [] }),
-      clientIds.size
-        ? supabase
-            .from("clients")
-            .select("id, full_name, email, status")
-            .in("id", Array.from(clientIds))
-        : Promise.resolve({ data: [] }),
-      matchedCallIds.size
-        ? supabase
-            .from("calls")
-            .select(
-              "id, client_id, coach_id, title, display_title, started_at, summary, recording_url, share_url, calendar_event_id"
-            )
-            .in("id", Array.from(matchedCallIds))
-        : Promise.resolve({ data: [] }),
-    ]);
-
-  const coachMap = new Map(
-    ((relatedCoaches ?? coaches) as Pick<Coach, "id" | "full_name" | "email">[]).map((coach) => [
-      coach.id,
-      coach,
-    ])
+  const events = eventRows as unknown as AdminCalendarEvent[];
+  const matchedEventIds = new Set(events.map((event) => event.matchedCall?.calendar_event_id).filter(Boolean));
+  const unscheduledCalls = (callRows as unknown as AdminUnscheduledCall[]).filter(
+    (call) => !call.calendar_event_id || !matchedEventIds.has(call.calendar_event_id)
   );
-  for (const coach of coaches) coachMap.set(coach.id, coach);
-
-  const clientMap = new Map(
-    ((relatedClients ?? []) as Pick<Client, "id" | "full_name" | "email" | "status">[]).map(
-      (client) => [client.id, client]
-    )
-  );
-  const matchedCallMap = new Map(
-    ((matchedCalls ?? []) as AdminCalendarEvent["matchedCall"][])
-      .filter((call): call is NonNullable<AdminCalendarEvent["matchedCall"]> => Boolean(call))
-      .map((call) => [call.id, call])
-  );
-
-  const callsByCalendarEvent = new Map<string, Call>();
-  for (const call of calls) {
-    if (call.calendar_event_id) callsByCalendarEvent.set(call.calendar_event_id, call);
-  }
-
-  const mappedEvents = events.map((event) => {
-    const matchedCall =
-      (event.matched_call_id ? matchedCallMap.get(event.matched_call_id) : null) ??
-      (event.id ? callsByCalendarEvent.get(event.id) : null) ??
-      null;
-
-    return {
-      ...event,
-      coach: event.coach_id ? coachMap.get(event.coach_id) ?? null : null,
-      client: event.client_id ? clientMap.get(event.client_id) ?? null : null,
-      matchedCall: matchedCall as AdminCalendarEvent["matchedCall"],
-    };
-  });
-
-  const matchedEventIds = new Set(mappedEvents.map((event) => event.matchedCall?.calendar_event_id).filter(Boolean));
-  const unscheduledCalls = calls
-    .filter((call) => !call.calendar_event_id || !matchedEventIds.has(call.calendar_event_id))
-    .map((call) => ({
-      id: call.id,
-      client_id: call.client_id,
-      coach_id: call.coach_id,
-      title: call.title,
-      display_title: call.display_title,
-      started_at: call.started_at,
-      summary: call.summary,
-      recording_url: call.recording_url,
-      share_url: call.share_url,
-      calendar_event_id: call.calendar_event_id,
-      coach: call.coach_id ? coachMap.get(call.coach_id) ?? null : null,
-      client: call.client_id ? clientMap.get(call.client_id) ?? null : null,
-    }));
 
   return {
-    events: mappedEvents,
+    events,
     unscheduledCalls,
-    coaches,
+    coaches: coaches as unknown as Pick<Coach, "id" | "full_name" | "email">[],
   };
 }
 
@@ -361,29 +285,35 @@ export interface AdminAnalytics {
 const DAY_MS = 1000 * 60 * 60 * 24;
 
 export async function getAdminAnalytics({ days = 30 }: { days?: number }): Promise<AdminAnalytics> {
-  const supabase = await createClient();
-
   const now = new Date();
   const todayUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
   const fromUTC = todayUTC - (days - 1) * DAY_MS;
   const from = new Date(fromUTC).toISOString();
   const to = new Date(todayUTC + DAY_MS).toISOString();
 
-  const [{ data: coachesData }, { data: callsData }, activeCount, extensionCount, inactiveCount] =
-    await Promise.all([
-      supabase
-        .from("coaches")
-        .select("id, full_name, email")
-        .eq("is_active", true)
-        .order("full_name", { ascending: true }),
-      supabase.from("calls").select("started_at, coach_id").gte("started_at", from).lt("started_at", to),
-      supabase.from("clients").select("id", { count: "exact", head: true }).eq("status", "active"),
-      supabase.from("clients").select("id", { count: "exact", head: true }).eq("status", "extension"),
-      supabase.from("clients").select("id", { count: "exact", head: true }).eq("status", "inactive"),
-    ]);
+  const sql = getSql();
+  const [coachRows, callRows, statusRows] = await Promise.all([
+    sql`
+      select id::text, full_name, email
+      from public.coaches
+      where is_active = true
+      order by full_name nulls last, email
+    `,
+    sql`
+      select started_at::text, coach_id::text
+      from public.calls
+      where started_at >= ${from}::timestamptz and started_at < ${to}::timestamptz
+    `,
+    sql`
+      select status, count(*)::int as count
+      from public.clients
+      group by status
+    `,
+  ]);
 
-  const coaches = (coachesData ?? []) as Pick<Coach, "id" | "full_name" | "email">[];
-  const calls = (callsData ?? []) as { started_at: string | null; coach_id: string | null }[];
+  const coaches = coachRows as unknown as Pick<Coach, "id" | "full_name" | "email">[];
+  const calls = callRows as unknown as { started_at: string | null; coach_id: string | null }[];
+  const statusCounts = new Map(statusRows.map((row) => [String(row.status), Number(row.count)]));
 
   // Zero-filled día a día para que el eje X sea continuo aunque falten datos,
   // con un sub-conteo por coach para poder apilar la barra de cada día.
@@ -421,9 +351,9 @@ export async function getAdminAnalytics({ days = 30 }: { days?: number }): Promi
       count: coachCallCounts.get(coach.id) ?? 0,
     })),
     statusBreakdown: {
-      active: activeCount.count ?? 0,
-      extension: extensionCount.count ?? 0,
-      inactive: inactiveCount.count ?? 0,
+      active: statusCounts.get("active") ?? 0,
+      extension: statusCounts.get("extension") ?? 0,
+      inactive: statusCounts.get("inactive") ?? 0,
     },
     totalCallsInRange: calls.length,
   };
@@ -460,50 +390,41 @@ export async function getAdminMonthCalendar({
   from: string;
   to: string;
 }): Promise<AdminMonthCalendar> {
-  const supabase = await createClient();
-
-  const [{ data: coachesData }, { data: callsData }] = await Promise.all([
-    supabase.from("coaches").select("id, full_name, email").eq("is_active", true).order("full_name", { ascending: true }),
-    supabase
-      .from("calls")
-      .select("id, client_id, coach_id, title, display_title, summary, started_at, duration_seconds, recording_url")
-      .gte("started_at", from)
-      .lt("started_at", to)
-      .order("started_at", { ascending: true }),
+  const sql = getSql();
+  const [coachRows, calls] = await Promise.all([
+    sql`
+      select id::text, full_name, email
+      from public.coaches
+      where is_active = true
+      order by full_name nulls last, email
+    `,
+    sql`
+      select
+        call.id::text as id,
+        call.client_id::text as "clientId",
+        call.coach_id::text as "coachId",
+        coalesce(coach.full_name, coach.email, 'Sin coach') as "coachName",
+        case when client.id is null then null else coalesce(client.full_name, client.email) end as "clientName",
+        call.title,
+        call.display_title,
+        call.summary,
+        call.started_at::text,
+        call.duration_seconds,
+        call.recording_url,
+        (call.summary is not null) as "hasSummary"
+      from public.calls call
+      left join public.coaches coach on coach.id = call.coach_id
+      left join public.clients client on client.id = call.client_id
+      where call.started_at >= ${from}::timestamptz and call.started_at < ${to}::timestamptz
+      order by call.started_at
+    `,
   ]);
 
-  const coaches = (coachesData ?? []) as Pick<Coach, "id" | "full_name" | "email">[];
-  const calls = (callsData ?? []) as Pick<
-    Call,
-    "id" | "client_id" | "coach_id" | "title" | "display_title" | "summary" | "started_at" | "duration_seconds" | "recording_url"
-  >[];
-
-  const clientIds = Array.from(new Set(calls.map((c) => c.client_id).filter(Boolean))) as string[];
-  const { data: clientsData } = clientIds.length
-    ? await supabase.from("clients").select("id, full_name, email").in("id", clientIds)
-    : { data: [] };
-
-  const clientMap = new Map(
-    ((clientsData ?? []) as Pick<Client, "id" | "full_name" | "email">[]).map((c) => [c.id, c.full_name || c.email])
-  );
-  const coachMap = new Map(coaches.map((c) => [c.id, c.full_name || c.email]));
+  const coaches = coachRows as unknown as Pick<Coach, "id" | "full_name" | "email">[];
 
   return {
     coaches: coaches.map((c) => ({ coachId: c.id, name: c.full_name || c.email })),
-    calls: calls.map((c) => ({
-      id: c.id,
-      coachId: c.coach_id,
-      coachName: c.coach_id ? coachMap.get(c.coach_id) ?? "Sin coach" : "Sin coach",
-      clientId: c.client_id,
-      clientName: c.client_id ? clientMap.get(c.client_id) ?? null : null,
-      title: c.title,
-      display_title: c.display_title,
-      summary: c.summary,
-      started_at: c.started_at,
-      duration_seconds: c.duration_seconds,
-      recording_url: c.recording_url,
-      hasSummary: Boolean(c.summary),
-    })),
+    calls: calls as unknown as MonthCalendarCall[],
   };
 }
 
@@ -517,21 +438,20 @@ export interface CoachCallCountForRange {
 // pago mensual en /admin/coaches (no confundir con getAdminAnalytics, que
 // trae el desglose día a día para la gráfica; acá solo hace falta el total).
 export async function getCoachCallCounts({ from, to }: { from: string; to: string }): Promise<CoachCallCountForRange[]> {
-  const supabase = await createClient();
-
-  const [{ data: coachesData }, { data: callsData }] = await Promise.all([
-    supabase.from("coaches").select("id, full_name, email").eq("is_active", true).order("full_name", { ascending: true }),
-    supabase.from("calls").select("coach_id").gte("started_at", from).lt("started_at", to),
-  ]);
-
-  const coaches = (coachesData ?? []) as Pick<Coach, "id" | "full_name" | "email">[];
-  const calls = (callsData ?? []) as { coach_id: string | null }[];
-
-  const counts = new Map<string, number>();
-  for (const call of calls) {
-    if (!call.coach_id) continue;
-    counts.set(call.coach_id, (counts.get(call.coach_id) ?? 0) + 1);
-  }
-
-  return coaches.map((c) => ({ coachId: c.id, name: c.full_name || c.email, count: counts.get(c.id) ?? 0 }));
+  const sql = getSql();
+  const rows = await sql`
+    select
+      coach.id::text as "coachId",
+      coalesce(coach.full_name, coach.email) as name,
+      count(call.id)::int as count
+    from public.coaches coach
+    left join public.calls call
+      on call.coach_id = coach.id
+      and call.started_at >= ${from}::timestamptz
+      and call.started_at < ${to}::timestamptz
+    where coach.is_active = true
+    group by coach.id
+    order by coach.full_name nulls last, coach.email
+  `;
+  return rows as unknown as CoachCallCountForRange[];
 }

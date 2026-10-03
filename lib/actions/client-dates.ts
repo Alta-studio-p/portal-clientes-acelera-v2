@@ -2,8 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { requireProfile } from "@/lib/auth";
-import { createAdminClient } from "@/lib/supabase/server";
+import { getSql } from "@/lib/db";
 import { getClientIdsForCoach, getCoachByProfileId } from "@/lib/data/client-detail";
+import { createAdminClient } from "@/lib/supabase/server";
 
 export interface UpdateDatesState {
   error: string | null;
@@ -45,13 +46,25 @@ export async function updateClientDates(
     return { error: "No tienes permiso para editar este cliente.", success: false };
   }
 
-  const supabase = await createAdminClient();
-  const { error } = await supabase
-    .from("clients")
-    .update({ start_date: startDateRaw || null, end_date: endDateRaw || null })
-    .eq("id", clientId);
+  try {
+    const supabase = await createAdminClient();
+    const { error } = await supabase
+      .from("clients")
+      .update({ start_date: startDateRaw || null, end_date: endDateRaw || null })
+      .eq("id", clientId);
+    if (error) throw error;
 
-  if (error) return { error: "No se pudieron guardar las fechas.", success: false };
+    const sql = getSql();
+    await sql`
+      update public.clients
+      set start_date = ${startDateRaw || null}::date,
+          end_date = ${endDateRaw || null}::date,
+          updated_at = now()
+      where id = ${clientId}::uuid
+    `;
+  } catch {
+    return { error: "No se pudieron guardar las fechas.", success: false };
+  }
 
   revalidatePath(`/admin/clients/${clientId}`);
   revalidatePath(`/coach/clients/${clientId}`);
