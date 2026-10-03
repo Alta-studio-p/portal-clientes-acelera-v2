@@ -17,11 +17,8 @@ const ONLY_SOURCE = (
 // borren a mano (ver "Susannah Durant").
 const EXCLUDED_EMAIL_DOMAINS = ["fathom.video"];
 // Correos de agenda/genéricos que Fathom a veces mete como invitado junto al
-// cliente real (ver README, sección "Cuentas fantasma detectadas"). Si no se
-// excluyen acá, primaryClientCandidate() los puede tomar como "el cliente" de
-// la llamada en vez de a la persona real — y como el import corre todas las
-// noches con 14 días de backfill, revierte cualquier corrección manual hecha
-// directo en Supabase para esas llamadas.
+// cliente real. Nunca pertenecen a la lista maestra y no deben asociar una
+// llamada a un cliente.
 const EXCLUDED_EMAILS = [
   "mari.aceleratalent@gmail.com",
   "rlconsultalent@gmail.com",
@@ -30,6 +27,10 @@ const EXCLUDED_EMAILS = [
   "jonathan.aceleratalent@gmail.com",
 ];
 const DEMO_TITLE_PATTERN = /^fathom demo$/i;
+
+const MASTER_CLIENTS = JSON.parse(
+  fs.readFileSync(new URL("../data/master-clients.json", import.meta.url), "utf8"),
+);
 
 loadEnv(".env.local");
 
@@ -107,19 +108,6 @@ function normalizeEmail(value) {
   return email.includes("@") ? email : null;
 }
 
-function titleCaseName(value) {
-  return cleanText(value)
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
-function nameFromEmail(email) {
-  return titleCaseName(String(email || "").split("@")[0].replace(/[._-]+/g, " "));
-}
-
 function dateFromMeeting(meeting) {
   return meeting.scheduled_start_time || meeting.recording_start_time || meeting.created_at || null;
 }
@@ -173,14 +161,30 @@ function externalInvitees(meeting) {
     );
 }
 
-function primaryClientCandidate(meeting) {
-  const invitees = externalInvitees(meeting);
-  const first = invitees[0];
-  if (!first) return null;
-  return {
-    email: first.email,
-    full_name: first.name || nameFromEmail(first.email),
-  };
+function normalizeIdentity(value) {
+  return cleanText(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function findMasterClient({ name, email }) {
+  const normalizedEmail = normalizeEmail(email);
+  if (normalizedEmail) {
+    const byEmail = MASTER_CLIENTS.find((client) => client.emails?.includes(normalizedEmail));
+    if (byEmail) return byEmail;
+  }
+
+  const normalizedName = normalizeIdentity(name);
+  if (!normalizedName) return null;
+  return (
+    MASTER_CLIENTS.find((client) => normalizeIdentity(client.name) === normalizedName) ??
+    MASTER_CLIENTS.find((client) => client.aliases?.some((alias) => normalizeIdentity(alias) === normalizedName)) ??
+    null
+  );
 }
 
 function contextFromFirstCall(call) {
@@ -189,6 +193,15 @@ function contextFromFirstCall(call) {
   const title = cleanText(call.title) || "primera llamada";
   const date = call.started_at ? String(call.started_at).slice(0, 10) : "fecha no disponible";
   return `Contexto general creado desde la primera llamada registrada (${date}, ${title}).\n\n${summary}`;
+}
+
+function addThreeMonths(startDate) {
+  const [year, month, day] = startDate.split("-").map(Number);
+  return new Date(Date.UTC(year, month + 2, day)).toISOString().slice(0, 10);
+}
+
+function todayDate() {
+  return new Date().toISOString().slice(0, 10);
 }
 
 function sbHeaders(extra = {}) {
@@ -258,31 +271,31 @@ async function readCoaches() {
   return new Map(rows.map((coach) => [coach.fathom_source_key, coach]));
 }
 
-async function findClientByEmail(email) {
-  if (!email) return null;
-  const rows = await sb(`clients?select=id,email,full_name,context_summary&email=eq.${encodeURIComponent(email)}&limit=1`);
-  return rows[0] || null;
-}
+async function readMasterClients() {
+  const rows = await sb("clients?select=id,email,full_name,context_summary");
+  const byName = new Map(rows.map((client) => [normalizeIdentity(client.full_name), client]));
+  const byEmail = new Map(rows.filter((client) => client.email).map((client) => [client.email.toLowerCase(), client]));
+  const masterClients = new Map();
 
-async function upsertClient(candidate) {
-  if (!candidate?.email) return null;
-  const existing = await findClientByEmail(candidate.email);
-  if (existing) return existing;
-
-  if (!APPLY) {
-    return { id: `dry-client:${candidate.email}`, email: candidate.email, full_name: candidate.full_name };
+  for (const master of MASTER_CLIENTS) {
+    const client =
+      byName.get(normalizeIdentity(master.name)) ??
+      master.aliases?.map((alias) => byName.get(normalizeIdentity(alias))).find(Boolean) ??
+      master.emails?.map((email) => byEmail.get(email)).find(Boolean) ??
+      null;
+    if (client) masterClients.set(master.name, client);
   }
 
-  const rows = await sb("clients?on_conflict=email", {
-    method: "POST",
-    headers: { Prefer: "resolution=merge-duplicates,return=representation" },
-    body: JSON.stringify({
-      email: candidate.email,
-      full_name: candidate.full_name,
-      status: "active",
-    }),
-  });
-  return rows[0] || null;
+  return masterClients;
+}
+
+function clientForMeeting(meeting, masterClients) {
+  for (const invitee of externalInvitees(meeting)) {
+    const master = findMasterClient(invitee);
+    const client = master ? masterClients.get(master.name) : null;
+    if (client) return client;
+  }
+  return null;
 }
 
 async function findCallByFathomId(fathomCallId) {
@@ -372,8 +385,37 @@ async function refreshClientContexts() {
   return updated;
 }
 
+async function refreshProgramDates(masterClients) {
+  if (!APPLY) return 0;
+  const clientIds = [...masterClients.values()].map((client) => client.id);
+  if (!clientIds.length) return 0;
+
+  const calls = await sb(
+    `calls?select=client_id,started_at&client_id=in.(${clientIds.join(",")})&started_at=not.is.null&order=started_at.asc`,
+  );
+  const firstCallByClient = new Map();
+  for (const call of calls) {
+    if (!firstCallByClient.has(call.client_id)) firstCallByClient.set(call.client_id, String(call.started_at).slice(0, 10));
+  }
+
+  let updated = 0;
+  for (const client of masterClients.values()) {
+    const startDate = firstCallByClient.get(client.id) ?? null;
+    const endDate = startDate ? addThreeMonths(startDate) : null;
+    const status = endDate && endDate < todayDate() ? "inactive" : "active";
+    await sb(`clients?id=eq.${encodeURIComponent(client.id)}`, {
+      method: "PATCH",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({ start_date: startDate, end_date: endDate, status }),
+    });
+    updated += 1;
+  }
+  return updated;
+}
+
 async function main() {
   const coaches = await readCoaches();
+  const masterClients = await readMasterClients();
   const stats = {
     meetings: 0,
     withClient: 0,
@@ -401,8 +443,7 @@ async function main() {
         continue;
       }
 
-      const candidate = primaryClientCandidate(meeting);
-      const client = candidate ? await upsertClient(candidate) : null;
+      const client = clientForMeeting(meeting, masterClients);
       if (client?.id) stats.withClient += 1;
       else stats.withoutClient += 1;
 
@@ -411,7 +452,7 @@ async function main() {
       if (summary) stats.withSummary += 1;
 
       const row = {
-        client_id: client?.id && !String(client.id).startsWith("dry-client:") ? client.id : null,
+        client_id: client?.id ?? null,
         coach_id: coach?.id || null,
         source: "fathom",
         fathom_call_id: String(meeting.recording_id),
@@ -453,6 +494,7 @@ async function main() {
   }
 
   const contextsUpdated = await refreshClientContexts();
+  const datesUpdated = await refreshProgramDates(masterClients);
 
   console.log(`Reuniones leidas: ${stats.meetings}`);
   console.log(`Reuniones con cliente detectado: ${stats.withClient}`);
@@ -461,6 +503,7 @@ async function main() {
   console.log(APPLY ? `Llamadas insertadas/actualizadas: ${stats.imported}` : "Modo prueba: no se modifico Supabase");
   console.log(APPLY ? `Asignaciones coach-cliente tocadas: ${stats.assignments}` : "");
   console.log(APPLY ? `Contextos de cliente creados: ${contextsUpdated}` : "");
+  console.log(APPLY ? `Fechas y estado recalculados: ${datesUpdated}` : "");
 }
 
 main().catch((error) => {

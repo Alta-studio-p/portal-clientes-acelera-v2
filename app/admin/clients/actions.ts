@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth";
 import { getSql } from "@/lib/db";
+import { findMasterClient, normalizeClientIdentity } from "@/lib/master-clients";
 import { createAdminClient } from "@/lib/supabase/server";
 
 export interface CreateClientState {
@@ -26,6 +27,10 @@ export async function createClientAction(
   if (!fullName) {
     return { error: "El nombre es obligatorio.", success: false };
   }
+  const masterClient = findMasterClient({ name: fullName, email });
+  if (!masterClient || normalizeClientIdentity(masterClient.name) !== normalizeClientIdentity(fullName)) {
+    return { error: "Solo puedes registrar clientes de la lista maestra.", success: false };
+  }
   if (!EMAIL_PATTERN.test(email)) {
     return { error: "Ingresa un correo válido.", success: false };
   }
@@ -46,7 +51,7 @@ export async function createClientAction(
   try {
     const { error: clientError } = await supabase
       .from("clients")
-      .insert({ id: clientId, email, full_name: fullName, status: "active" });
+      .insert({ id: clientId, email, full_name: masterClient.name, status: "active" });
     if (clientError) throw clientError;
 
     if (coachId && assignmentId) {
@@ -60,7 +65,7 @@ export async function createClientAction(
     const queries = [
       sql`
         insert into public.clients (id, email, full_name, status)
-        values (${clientId}::uuid, ${email}, ${fullName}, 'active')
+        values (${clientId}::uuid, ${email}, ${masterClient.name}, 'active')
       `,
     ];
     if (coachId && assignmentId) {

@@ -31,11 +31,17 @@ function remainingLabel(progress: ProgramProgress | null) {
   return `${progress.daysRemaining} día${progress.daysRemaining === 1 ? "" : "s"}`;
 }
 
+function startLabel(client: ClientListRow) {
+  return client.start_date ? formatDate(client.start_date) : "Sin datos";
+}
+
 function progressValue(item: ClientWithProgress, completed: boolean) {
   return completed ? 100 : item.progress?.percentElapsed ?? null;
 }
 
 function statusContent(item: ClientWithProgress) {
+  if (!item.progress) return <span className="font-medium text-muted">Sin datos de llamadas</span>;
+
   if (item.cadence.behind) {
     return (
       <span className="inline-flex items-center gap-1.5 font-medium text-[--alert-warning]">
@@ -68,13 +74,14 @@ function ProgressBar({ value }: { value: number | null }) {
 function ActiveClientsTable({ clients, showCoach }: { clients: ClientWithProgress[]; showCoach: boolean }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-border bg-surface">
-      <table className="w-full min-w-[760px] border-collapse text-left text-sm">
+      <table className="w-full min-w-[850px] border-collapse text-left text-sm">
         <thead className="border-b border-border bg-surface-muted/60 text-xs font-medium text-muted">
           <tr>
             <th className="px-4 py-3">Cliente</th>
             {showCoach && <th className="px-4 py-3">Coach</th>}
             <th className="px-4 py-3">Progreso</th>
             <th className="px-4 py-3 text-right">Sesiones</th>
+            <th className="px-4 py-3">Inicio</th>
             <th className="px-4 py-3">Última llamada</th>
             <th className="px-4 py-3">Faltan</th>
             <th className="px-4 py-3">Estado</th>
@@ -91,6 +98,7 @@ function ActiveClientsTable({ clients, showCoach }: { clients: ClientWithProgres
               {showCoach && <td className="max-w-[150px] truncate px-4 py-3 text-muted">{coachName(item.client)}</td>}
               <td className="px-4 py-3"><ProgressBar value={progressValue(item, false)} /></td>
               <td className="px-4 py-3 text-right tabular-nums text-muted">{item.client.call_count}</td>
+              <td className="px-4 py-3 whitespace-nowrap text-muted">{startLabel(item.client)}</td>
               <td className="px-4 py-3 whitespace-nowrap text-muted">{formatDate(item.client.last_call_at)}</td>
               <td className="px-4 py-3 whitespace-nowrap font-medium tabular-nums text-foreground">{remainingLabel(item.progress)}</td>
               <td className="px-4 py-3 whitespace-nowrap text-xs">{statusContent(item)}</td>
@@ -105,13 +113,14 @@ function ActiveClientsTable({ clients, showCoach }: { clients: ClientWithProgres
 function CompletedClientsTable({ clients, showCoach }: { clients: ClientWithProgress[]; showCoach: boolean }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-border bg-surface">
-      <table className="w-full min-w-[600px] border-collapse text-left text-sm">
+      <table className="w-full min-w-[680px] border-collapse text-left text-sm">
         <thead className="border-b border-border bg-surface-muted/60 text-xs font-medium text-muted">
           <tr>
             <th className="px-4 py-3">Cliente</th>
             {showCoach && <th className="px-4 py-3">Coach</th>}
             <th className="px-4 py-3">Progreso</th>
             <th className="px-4 py-3 text-right">Sesiones</th>
+            <th className="px-4 py-3">Inicio</th>
             <th className="px-4 py-3">Fecha de finalización</th>
           </tr>
         </thead>
@@ -126,6 +135,7 @@ function CompletedClientsTable({ clients, showCoach }: { clients: ClientWithProg
               {showCoach && <td className="max-w-[170px] truncate px-4 py-3 text-muted">{coachName(item.client)}</td>}
               <td className="px-4 py-3"><ProgressBar value={progressValue(item, true)} /></td>
               <td className="px-4 py-3 text-right tabular-nums text-muted">{item.client.call_count}</td>
+              <td className="px-4 py-3 whitespace-nowrap text-muted">{startLabel(item.client)}</td>
               <td className="px-4 py-3 whitespace-nowrap text-muted">{formatDate(item.client.end_date)}</td>
             </tr>
           ))}
@@ -154,10 +164,11 @@ export default async function AdminProgressPage({
     progress: getProgramProgress(client),
   }));
 
-  // Un cliente inactivo o cuyo programa llegó al 100% se mantiene visible en
-  // "Completados". Así no desaparecen los finalizados del coach que los atendió.
+  // El estado del programa se calcula desde las llamadas reales: primera
+  // llamada + tres meses. Un estado administrativo anterior no puede ocultar
+  // ni mover a un cliente de la lista maestra.
   const completed = clients
-    .filter((item) => item.client.status === "inactive" || item.progress?.percentElapsed === 100)
+    .filter((item) => item.progress !== null && item.progress.daysRemaining <= 0)
     .sort((a, b) => (b.client.end_date ?? "").localeCompare(a.client.end_date ?? ""));
   const active = clients
     .filter((item) => !completed.includes(item))

@@ -4,9 +4,9 @@ import type { ClientStatus } from "@/lib/supabase/types";
 // naranja de "por terminar" no aplica a estos clientes.
 const FINISHED_STATUS: ClientStatus = "inactive";
 
-// Fecha final por defecto: mismo día, 3 meses después. Ej: 2026-03-02 ->
-// 2026-06-02. Es solo el valor inicial sugerido; end_date siempre queda
-// editable para extensiones y nunca se recalcula sola.
+// Fecha final: mismo día, tres meses después de la primera llamada real.
+// La importación diaria vuelve a calcular este valor para conservar una única
+// fuente de verdad en Fathom.
 export function addThreeMonthsSameDay(startDate: string): string {
   const [year, month, day] = startDate.split("-").map(Number);
   const result = new Date(Date.UTC(year, month - 1 + 3, day));
