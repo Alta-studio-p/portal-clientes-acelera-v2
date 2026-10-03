@@ -205,7 +205,7 @@ export default async function AdminHomePage({
 
       <div className="mt-8 flex gap-3">
         <Link
-          href="/admin/clients"
+          href="/admin/progress"
           className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover"
         >
           Ver todos los clientes

@@ -6,7 +6,6 @@ const NAV_ITEMS = [
   { href: "/admin", label: "Resumen" },
   { href: "/admin/progress", label: "Progreso" },
   { href: "/admin/calendar", label: "Calendario" },
-  { href: "/admin/clients", label: "Clientes" },
   { href: "/admin/coaches", label: "Coaches" },
 ];
 
@@ -19,7 +18,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
       roleLabel="Admin"
       userName={profile.full_name || email}
       userEmail={email}
-      searchAction="/admin/clients"
+      searchAction="/admin/progress"
     >
       {children}
     </AppShell>
