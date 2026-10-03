@@ -21,7 +21,7 @@ export default async function AdminClientDetailPage({
       client={client}
       selectedCallId={call}
       callHrefBase={`/admin/clients/${id}`}
-      backHref="/admin/progress"
+      backHref="/admin/clients"
       headerActions={
         <AdminClientSettings client={client} driveStatus={drive} clientStatus={status} />
       }

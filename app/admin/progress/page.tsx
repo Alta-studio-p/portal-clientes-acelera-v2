@@ -1,10 +1,22 @@
-import { PageHeader } from "@/components/ui";
-import { getClientsList, getCoachesWithClients } from "@/lib/data/admin";
-import { getCadenceStatus, getProgramProgress } from "@/lib/program-dates";
-import { ProgressBoard, type ProgressClient } from "./progress-board";
+import Link from "next/link";
+import { TriangleAlert } from "lucide-react";
+import { EmptyState, PageHeader, SectionLabel } from "@/components/ui";
+import { getClientsList, getCoachesWithClients, type ClientListRow } from "@/lib/data/admin";
+import { formatDate } from "@/lib/format";
+import { getCadenceStatus, getProgramProgress, type CadenceStatus, type ProgramProgress } from "@/lib/program-dates";
 
-function clientName(client: { full_name: string | null; email: string }) {
+type ClientWithProgress = {
+  client: ClientListRow;
+  cadence: CadenceStatus;
+  progress: ProgramProgress | null;
+};
+
+function clientName(client: ClientListRow) {
   return client.full_name || client.email;
+}
+
+function coachName(client: ClientListRow) {
+  return client.coach_names.length > 0 ? client.coach_names.join(", ") : "Sin coach";
 }
 
 function shortCoachName(coach: { full_name: string | null; email: string }) {
@@ -12,67 +24,249 @@ function shortCoachName(coach: { full_name: string | null; email: string }) {
   return fullName ? fullName.split(/\s+/)[0] : coach.email;
 }
 
-export default async function AdminProgressPage() {
-  // Todos los filtros son de presentación y viven en ProgressBoard. La consulta
-  // sigue leyendo la misma fuente Neon que usaba la tabla anterior.
-  const [allClients, coaches] = await Promise.all([getClientsList({}), getCoachesWithClients()]);
+function remainingLabel(progress: ProgramProgress | null) {
+  if (!progress) return "—";
+  if (progress.daysRemaining < 0) return "Finalizó";
+  if (progress.daysRemaining === 0) return "Hoy";
+  return `${progress.daysRemaining} día${progress.daysRemaining === 1 ? "" : "s"}`;
+}
 
-  const clients: ProgressClient[] = allClients.map((client) => {
-    const cadence = getCadenceStatus({
-      status: client.status,
-      start_date: client.start_date,
-      last_call_at: client.last_call_at,
-    });
-    const progress = getProgramProgress(client);
-    const completed = progress !== null && progress.daysRemaining <= 0;
-    const ending = !completed && progress !== null && progress.daysRemaining <= 15;
-    const category: ProgressClient["category"] = completed
-      ? "completed"
-      : cadence.behind
-        ? "attention"
-        : ending
-          ? "ending"
-          : "in-progress";
-    const reason = completed
-      ? "Programa finalizado"
-      : cadence.behind
-        ? `Sin sesión hace ${cadence.daysSinceLastCall} días`
-        : ending
-          ? progress.daysRemaining === 0 ? "Finaliza hoy" : `Faltan ${progress.daysRemaining} días`
-          : client.last_call_at
-            ? "Seguimiento al día"
-            : "Sin sesiones registradas";
+function startLabel(client: ClientListRow) {
+  return client.start_date ? formatDate(client.start_date) : "Sin datos";
+}
 
-    return {
-      id: client.id,
-      name: clientName(client),
-      coachNames: client.coach_names,
-      startDate: client.start_date,
-      endDate: client.end_date,
-      callCount: client.call_count,
-      lastCallAt: client.last_call_at,
-      calls: client.calls,
-      nextSession: client.next_session,
-      category,
-      reason,
-      daysRemaining: progress?.daysRemaining ?? null,
-      daysSinceLastCall: cadence.daysSinceLastCall,
-    };
-  });
+function byEntryDate(a: ClientWithProgress, b: ClientWithProgress) {
+  return (a.client.start_date ?? "9999-12-31").localeCompare(b.client.start_date ?? "9999-12-31");
+}
 
-  const boardCoaches = coaches.map((coach) => ({
-    id: coach.id,
-    name: shortCoachName(coach),
-    clientIds: coach.clients.map((client) => client.id),
+function progressValue(item: ClientWithProgress, completed: boolean) {
+  return completed ? 100 : item.progress?.percentElapsed ?? null;
+}
+
+function statusContent(item: ClientWithProgress) {
+  if (!item.progress) return <span className="font-medium text-muted">Sin datos de llamadas</span>;
+
+  if (item.cadence.behind) {
+    return (
+      <span className="inline-flex items-center gap-1.5 font-medium text-[--alert-warning]">
+        <TriangleAlert size={14} strokeWidth={2.5} aria-hidden="true" />
+        Sin llamada hace {item.cadence.daysSinceLastCall} días
+      </span>
+    );
+  }
+
+  if (item.progress && item.progress.daysRemaining <= 15) {
+    return <span className="font-medium text-[--alert-warning]">Termina pronto</span>;
+  }
+
+  return <span className="font-medium text-[--status-active]">En curso</span>;
+}
+
+function ProgressBar({ value }: { value: number | null }) {
+  if (value === null) return <span className="text-muted-2">Sin fechas</span>;
+
+  return (
+    <div className="flex min-w-[124px] items-center gap-2.5">
+      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-muted">
+        <div className="h-full rounded-full bg-accent" style={{ width: `${Math.max(value, 3)}%` }} />
+      </div>
+      <span className="w-9 text-right font-semibold tabular-nums text-foreground">{value}%</span>
+    </div>
+  );
+}
+
+function ActiveClientsTable({ clients, showCoach }: { clients: ClientWithProgress[]; showCoach: boolean }) {
+  return (
+    <div className="overflow-x-auto rounded-xl border border-border bg-surface">
+      <table className="w-full min-w-[850px] border-collapse text-left text-sm">
+        <thead className="border-b border-border bg-surface-muted/60 text-xs font-medium text-muted">
+          <tr>
+            <th className="px-4 py-3">Cliente</th>
+            {showCoach && <th className="px-4 py-3">Coach</th>}
+            <th className="px-4 py-3">Progreso</th>
+            <th className="px-4 py-3 text-right">Sesiones</th>
+            <th className="px-4 py-3">Inicio</th>
+            <th className="px-4 py-3">Última llamada</th>
+            <th className="px-4 py-3">Faltan</th>
+            <th className="px-4 py-3">Estado</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border">
+          {clients.map((item) => (
+            <tr key={item.client.id} className="transition hover:bg-surface-muted/40">
+              <td className="px-4 py-3">
+                <Link href={`/admin/clients/${item.client.id}`} className="block max-w-[220px] truncate font-medium text-foreground hover:text-accent">
+                  {clientName(item.client)}
+                </Link>
+              </td>
+              {showCoach && <td className="max-w-[150px] truncate px-4 py-3 text-muted">{coachName(item.client)}</td>}
+              <td className="px-4 py-3"><ProgressBar value={progressValue(item, false)} /></td>
+              <td className="px-4 py-3 text-right tabular-nums text-muted">{item.client.call_count}</td>
+              <td className="px-4 py-3 whitespace-nowrap text-muted">{startLabel(item.client)}</td>
+              <td className="px-4 py-3 whitespace-nowrap text-muted">{formatDate(item.client.last_call_at)}</td>
+              <td className="px-4 py-3 whitespace-nowrap font-medium tabular-nums text-foreground">{remainingLabel(item.progress)}</td>
+              <td className="px-4 py-3 whitespace-nowrap text-xs">{statusContent(item)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function CompletedClientsTable({ clients, showCoach }: { clients: ClientWithProgress[]; showCoach: boolean }) {
+  return (
+    <div className="overflow-x-auto rounded-xl border border-border bg-surface">
+      <table className="w-full min-w-[680px] border-collapse text-left text-sm">
+        <thead className="border-b border-border bg-surface-muted/60 text-xs font-medium text-muted">
+          <tr>
+            <th className="px-4 py-3">Cliente</th>
+            {showCoach && <th className="px-4 py-3">Coach</th>}
+            <th className="px-4 py-3">Progreso</th>
+            <th className="px-4 py-3 text-right">Sesiones</th>
+            <th className="px-4 py-3">Inicio</th>
+            <th className="px-4 py-3">Fecha de finalización</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border">
+          {clients.map((item) => (
+            <tr key={item.client.id} className="transition hover:bg-surface-muted/40">
+              <td className="px-4 py-3">
+                <Link href={`/admin/clients/${item.client.id}`} className="block max-w-[250px] truncate font-medium text-foreground hover:text-accent">
+                  {clientName(item.client)}
+                </Link>
+              </td>
+              {showCoach && <td className="max-w-[170px] truncate px-4 py-3 text-muted">{coachName(item.client)}</td>}
+              <td className="px-4 py-3"><ProgressBar value={progressValue(item, true)} /></td>
+              <td className="px-4 py-3 text-right tabular-nums text-muted">{item.client.call_count}</td>
+              <td className="px-4 py-3 whitespace-nowrap text-muted">{startLabel(item.client)}</td>
+              <td className="px-4 py-3 whitespace-nowrap text-muted">{formatDate(item.client.end_date)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export default async function AdminProgressPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ coach?: string }>;
+}) {
+  const params = await searchParams;
+  const selectedCoachId = params.coach || undefined;
+
+  const [allClients, coaches] = await Promise.all([
+    getClientsList({ coachId: selectedCoachId }),
+    getCoachesWithClients(),
+  ]);
+
+  const clients = allClients.map((client) => ({
+    client,
+    cadence: getCadenceStatus({ status: client.status, start_date: client.start_date, last_call_at: client.last_call_at }),
+    progress: getProgramProgress(client),
   }));
+
+  // El estado del programa se calcula desde las llamadas reales: primera
+  // llamada + tres meses. Un estado administrativo anterior no puede ocultar
+  // ni mover a un cliente de la lista maestra.
+  const completed = clients
+    .filter((item) => item.progress !== null && item.progress.daysRemaining <= 0)
+    .sort(byEntryDate);
+  const active = clients
+    .filter((item) => !completed.includes(item))
+    .sort(byEntryDate);
+
+  const requiringAttention = active.filter((item) => item.cadence.behind).length;
+  const nearingEnd = active.filter((item) => (item.progress?.daysRemaining ?? Infinity) <= 15).length;
+  const selectedCoach = coaches.find((coach) => coach.id === selectedCoachId);
+  const selectedCoachName = selectedCoach ? shortCoachName(selectedCoach) : undefined;
+  const showCoach = !selectedCoachId;
 
   return (
     <div>
       <PageHeader
         title="Progreso de clientes"
-        description="Prioriza la gestión diaria con sesiones, próximas citas y señales de atención."
+        description="Ordenado por fecha de entrada: la primera llamada registrada de cada cliente."
       />
-      <ProgressBoard clients={clients} coaches={boardCoaches} />
+
+      <div className="mb-6 grid overflow-hidden rounded-xl border border-border bg-surface sm:grid-cols-4 sm:divide-x sm:divide-border">
+        {[
+          ["Clientes activos", active.length, "text-accent"],
+          ["Requieren atención", requiringAttention, requiringAttention > 0 ? "text-[--alert-warning]" : "text-foreground"],
+          ["Por terminar pronto", nearingEnd, nearingEnd > 0 ? "text-[--alert-warning]" : "text-foreground"],
+          ["Completados", completed.length, "text-[--status-active]"],
+        ].map(([label, value, color]) => (
+          <div key={label as string} className="border-b border-border px-4 py-3 last:border-b-0 sm:border-b-0">
+            <p className="text-xs font-medium text-muted">{label}</p>
+            <p className={`mt-1 text-xl font-semibold tabular-nums ${color}`}>{value}</p>
+          </div>
+        ))}
+      </div>
+
+      <nav aria-label="Filtrar progreso por coach" className="mb-7 flex gap-2 overflow-x-auto pb-1">
+        <Link
+          href="/admin/progress"
+          aria-current={!selectedCoachId ? "page" : undefined}
+          className={`shrink-0 rounded-full border px-3.5 py-2 text-sm font-medium transition ${!selectedCoachId ? "border-accent bg-accent text-white" : "border-border bg-surface text-muted hover:border-accent hover:text-accent"}`}
+        >
+          Todos
+        </Link>
+        {coaches.map((coach) => {
+          const isSelected = coach.id === selectedCoachId;
+          const name = shortCoachName(coach);
+          return (
+            <Link
+              key={coach.id}
+              href={`/admin/progress?coach=${encodeURIComponent(coach.id)}`}
+              aria-current={isSelected ? "page" : undefined}
+              className={`shrink-0 rounded-full border px-3.5 py-2 text-sm font-medium transition ${isSelected ? "border-accent bg-accent text-white" : "border-border bg-surface text-muted hover:border-accent hover:text-accent"}`}
+            >
+              {name}
+            </Link>
+          );
+        })}
+      </nav>
+
+      {selectedCoachName && (
+        <div className="mb-5">
+          <h2 className="text-lg font-semibold text-foreground">{selectedCoachName}</h2>
+          <p className="mt-0.5 text-sm text-muted">
+            {clients.length} cliente{clients.length === 1 ? "" : "s"} · {active.length} en curso · {completed.length} completado{completed.length === 1 ? "" : "s"}
+          </p>
+        </div>
+      )}
+
+      {clients.length === 0 ? (
+        <EmptyState
+          title={selectedCoachName ? `Sin clientes para ${selectedCoachName}` : "Sin clientes registrados"}
+          description="Los clientes asignados aparecerán aquí cuando estén disponibles."
+        />
+      ) : (
+        <div className="space-y-8">
+          <section aria-labelledby="en-curso">
+            <div className="mb-3 flex items-center justify-between">
+              <SectionLabel><span id="en-curso">En curso ({active.length})</span></SectionLabel>
+              {requiringAttention > 0 && <span className="text-xs font-medium text-[--alert-warning]">{requiringAttention} requieren atención</span>}
+            </div>
+            {active.length > 0 ? (
+              <ActiveClientsTable clients={active} showCoach={showCoach} />
+            ) : (
+              <div className="rounded-xl border border-dashed border-border bg-surface px-4 py-6 text-sm text-muted">No hay clientes en curso.</div>
+            )}
+          </section>
+
+          <section aria-labelledby="completados">
+            <SectionLabel><span id="completados">Completados ({completed.length})</span></SectionLabel>
+            {completed.length > 0 ? (
+              <CompletedClientsTable clients={completed} showCoach={showCoach} />
+            ) : (
+              <div className="rounded-xl border border-dashed border-border bg-surface px-4 py-6 text-sm text-muted">No hay clientes completados todavía.</div>
+            )}
+          </section>
+        </div>
+      )}
     </div>
   );
 }

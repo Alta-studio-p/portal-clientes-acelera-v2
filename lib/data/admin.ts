@@ -28,16 +28,7 @@ export interface ClientListRow extends Client {
   coach_names: string[];
   call_count: number;
   last_call_at: string | null;
-  calls: {
-    id: string;
-    started_at: string | null;
-    title: string | null;
-    display_title: string | null;
-    summary: string | null;
-    share_url: string | null;
-    recording_url: string | null;
-  }[];
-  next_session: { starts_at: string; title: string | null } | null;
+  calls: { id: string; started_at: string | null }[];
 }
 
 export async function getClientsList(filters: {
@@ -75,8 +66,7 @@ export async function getClientsList(filters: {
       coalesce(assignments.coach_names, '{}') as coach_names,
       coalesce(client_calls.call_count, 0)::int as call_count,
       client_calls.last_call_at,
-      coalesce(client_calls.calls, '[]'::jsonb) as calls,
-      next_session.next_session
+      coalesce(client_calls.calls, '[]'::jsonb) as calls
     from public.clients c
     left join lateral (
       select array_agg(coalesce(coach.full_name, coach.email) order by coalesce(coach.full_name, coach.email)) as coach_names
@@ -88,27 +78,10 @@ export async function getClientsList(filters: {
       select
         count(*)::int as call_count,
         max(call.started_at)::text as last_call_at,
-        jsonb_agg(jsonb_build_object(
-          'id', call.id::text,
-          'started_at', call.started_at::text,
-          'title', call.title,
-          'display_title', call.display_title,
-          'summary', call.summary,
-          'share_url', call.share_url,
-          'recording_url', call.recording_url
-        ) order by call.started_at) as calls
+        jsonb_agg(jsonb_build_object('id', call.id::text, 'started_at', call.started_at::text) order by call.started_at) as calls
       from public.calls call
       where call.client_id = c.id
     ) client_calls on true
-    left join lateral (
-      select jsonb_build_object('starts_at', event.starts_at::text, 'title', event.title) as next_session
-      from public.calendar_events event
-      where event.client_id = c.id
-        and event.starts_at >= now()
-        and event.status = 'scheduled'
-      order by event.starts_at asc
-      limit 1
-    ) next_session on true
     ${where}
     order by c.start_date asc nulls last, c.full_name nulls last, c.email`,
     values
