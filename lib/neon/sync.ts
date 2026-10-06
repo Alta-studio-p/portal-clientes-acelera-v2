@@ -52,7 +52,7 @@ function upsertQuery(table: TableName) {
         is_active=excluded.is_active, created_at=excluded.created_at, updated_at=excluded.updated_at`;
     case "clients":
       return `insert into public.clients select * from jsonb_populate_recordset(null::public.clients, $1::jsonb)
-        on conflict (id) do update set profile_id=excluded.profile_id, email=excluded.email, full_name=excluded.full_name,
+        on conflict (id) do update set profile_id=coalesce(public.clients.profile_id, excluded.profile_id), email=excluded.email, full_name=excluded.full_name,
         status=excluded.status, drive_folder_url=excluded.drive_folder_url, drive_folder_id=excluded.drive_folder_id,
         first_call_id=excluded.first_call_id, context_summary=excluded.context_summary,
         context_source_call_id=excluded.context_source_call_id, context_generated_at=excluded.context_generated_at,
