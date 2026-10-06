@@ -133,6 +133,9 @@ export default async function AdminCoachesPage({
                   <p className="text-sm text-muted">{coach.email}</p>
                 </div>
                 <div className="flex items-center gap-2">
+                  <Link href={`/admin/fees?coach=${coach.id}`} className="rounded-md border border-border px-3 py-2 text-sm font-medium text-accent hover:bg-accent-soft">
+                    Llamadas
+                  </Link>
                   {!coach.is_active && (
                     <span className="rounded-full bg-surface-muted px-2.5 py-0.5 text-xs font-medium text-muted">
                       Inactivo

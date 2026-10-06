@@ -4,7 +4,10 @@ import { requireRole } from "@/lib/auth";
 import { getCoachByProfileId } from "@/lib/data/client-detail";
 import { AppShell } from "@/components/app-shell";
 
-const NAV_ITEMS = [{ href: "/coach", label: "Mis clientes" }];
+const NAV_ITEMS = [
+  { href: "/coach", label: "Mis clientes" },
+  { href: "/coach/fees", label: "Mis llamadas" },
+];
 
 export default async function CoachLayout({ children }: { children: ReactNode }) {
   const { profile, email, userId } = await requireRole(["coach"]);
