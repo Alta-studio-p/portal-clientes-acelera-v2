@@ -1,4 +1,6 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
+import { Eye } from "lucide-react";
 import { getClientDetail } from "@/lib/data/client-detail";
 import { ClientDetailView } from "@/components/client-detail-view";
 import { AdminClientSettings } from "./admin-client-settings";
@@ -23,7 +25,12 @@ export default async function AdminClientDetailPage({
       callHrefBase={`/admin/clients/${id}`}
       backHref="/admin/clients"
       headerActions={
-        <AdminClientSettings client={client} driveStatus={drive} clientStatus={status} />
+        <div className="flex flex-wrap items-center gap-2">
+          <Link href={`/preview/clients/${id}${call ? `?call=${encodeURIComponent(call)}` : ''}`} className="inline-flex min-h-11 items-center gap-2 rounded-md border border-border bg-surface px-3 text-sm font-medium text-foreground hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-accent">
+            <Eye size={16} aria-hidden="true" />Vista previa como cliente
+          </Link>
+          <AdminClientSettings client={client} driveStatus={drive} clientStatus={status} />
+        </div>
       }
       showNotes
     />
