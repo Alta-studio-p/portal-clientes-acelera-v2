@@ -26,7 +26,7 @@ export default async function ClientPreviewPage({ params, searchParams }: {
       </Link>
     </div>
     <AppShell navItems={[{ href: base, label: 'Mi progreso' }]} roleLabel="Admin · Vista previa" userName={profile.full_name || email} userEmail={email}>
-      <ClientDetailView client={client} selectedCallId={call} callHrefBase={base} />
+      <ClientDetailView client={client} selectedCallId={call} callHrefBase={base} showProgramStatus={false} />
     </AppShell>
   </>;
 }

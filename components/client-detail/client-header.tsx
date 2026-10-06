@@ -10,10 +10,12 @@ export function ClientHeader({
   client,
   backHref,
   headerActions,
+  showProgramStatus = true,
 }: {
   client: ClientDetail;
   backHref?: string;
   headerActions?: ReactNode;
+  showProgramStatus?: boolean;
 }) {
   const coachNames = client.coaches.map((c) => c.full_name || c.email).join(", ");
 
@@ -41,8 +43,8 @@ export function ClientHeader({
               <h1 className="truncate text-[28px] font-bold leading-tight text-foreground">
                 {client.full_name || client.email}
               </h1>
-              <StatusBadge status={client.status} />
-              <ProgramAlertBadge status={client.status} end_date={client.end_date} />
+              {showProgramStatus && <StatusBadge status={client.status} />}
+              {showProgramStatus && <ProgramAlertBadge status={client.status} end_date={client.end_date} />}
             </div>
             <p className="mt-1 truncate text-sm text-muted">
               {client.email}

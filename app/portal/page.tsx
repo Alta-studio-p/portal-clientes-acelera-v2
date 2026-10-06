@@ -32,5 +32,5 @@ export default async function PortalPage({
     );
   }
 
-  return <ClientDetailView client={client} selectedCallId={call} callHrefBase="/portal" />;
+  return <ClientDetailView client={client} selectedCallId={call} callHrefBase="/portal" showProgramStatus={false} />;
 }
