@@ -71,8 +71,8 @@ export async function getClientDetail(clientId: string): Promise<ClientDetail | 
         call.share_url,
         call.calendar_event_id::text,
         call.raw_metadata,
-        coalesce(
-          jsonb_agg(
+        coalesce((
+          select jsonb_agg(
             jsonb_build_object(
               'id', participant.id::text,
               'call_id', participant.call_id::text,
@@ -80,13 +80,12 @@ export async function getClientDetail(clientId: string): Promise<ClientDetail | 
               'name', participant.name,
               'role_hint', participant.role_hint
             ) order by participant.created_at
-          ) filter (where participant.id is not null),
+          ) from public.call_participants participant where participant.call_id = call.id
+        ),
           '[]'::jsonb
         ) as participants
       from public.client_sessions call
-      left join public.call_participants participant on participant.call_id = call.id
       where call.client_id = ${clientId}::uuid
-      group by call.id
       order by call.started_at desc nulls last
     `,
     sql`
