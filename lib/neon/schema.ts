@@ -1,3 +1,5 @@
+import { CLIENT_SESSIONS_VIEW_SQL } from '@/lib/call-sessions';
+
 export const NEON_SCHEMA_STATEMENTS = [
   `create table if not exists public.profiles (
     id uuid primary key,
@@ -127,4 +129,5 @@ export const NEON_SCHEMA_STATEMENTS = [
   `create index if not exists calendar_events_client_starts_idx on public.calendar_events (client_id, starts_at desc)`,
   `create index if not exists calendar_events_coach_starts_idx on public.calendar_events (coach_id, starts_at desc)`,
   `create index if not exists client_files_client_id_idx on public.client_files (client_id)`,
+  CLIENT_SESSIONS_VIEW_SQL,
 ] as const;

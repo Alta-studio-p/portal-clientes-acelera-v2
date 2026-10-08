@@ -30,7 +30,7 @@ export async function getClientsForCoach(coachId: string): Promise<CoachClientRo
       max(calls.started_at)::text as last_call_at
     from public.coach_client_assignments a
     join public.clients c on c.id = a.client_id
-    left join public.calls calls on calls.client_id = c.id
+    left join public.client_sessions calls on calls.client_id = c.id
     where a.coach_id = ${coachId}::uuid
     group by c.id, a.is_primary
     order by coalesce(c.full_name, c.email)

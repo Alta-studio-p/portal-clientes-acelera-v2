@@ -83,7 +83,7 @@ export async function getClientDetail(clientId: string): Promise<ClientDetail | 
           ) filter (where participant.id is not null),
           '[]'::jsonb
         ) as participants
-      from public.calls call
+      from public.client_sessions call
       left join public.call_participants participant on participant.call_id = call.id
       where call.client_id = ${clientId}::uuid
       group by call.id

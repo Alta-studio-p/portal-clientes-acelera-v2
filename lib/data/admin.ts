@@ -17,8 +17,8 @@ export async function getAdminCounts(): Promise<AdminCounts> {
     select
       (select count(*)::int from public.clients) as clients,
       (select count(*)::int from public.coaches) as coaches,
-      (select count(*)::int from public.calls) as calls,
-      (select count(*)::int from public.calls where summary is not null) as "callsWithSummary",
+      (select count(*)::int from public.client_sessions) as calls,
+      (select count(*)::int from public.client_sessions where summary is not null) as "callsWithSummary",
       (select count(*)::int from public.clients where context_summary is not null) as "clientsWithContext"
   `;
   return counts as unknown as AdminCounts;
@@ -79,7 +79,7 @@ export async function getClientsList(filters: {
         count(*)::int as call_count,
         max(call.started_at)::text as last_call_at,
         jsonb_agg(jsonb_build_object('id', call.id::text, 'started_at', call.started_at::text) order by call.started_at) as calls
-      from public.calls call
+      from public.client_sessions call
       where call.client_id = c.id
     ) client_calls on true
     ${where}
