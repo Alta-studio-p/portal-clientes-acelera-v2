@@ -23,11 +23,13 @@ jobs:
       FATHOM_SOURCE_ALEX_API_KEY: ${{ secrets.FATHOM_SOURCE_ALEX_API_KEY }}
       FATHOM_SOURCE_JOTA_API_KEY: ${{ secrets.FATHOM_SOURCE_JOTA_API_KEY }}
       FATHOM_SOURCE_LORENA_API_KEY: ${{ secrets.FATHOM_SOURCE_LORENA_API_KEY }}
+      FATHOM_SOURCE_CARO_API_KEY: ${{ secrets.FATHOM_SOURCE_CARO_API_KEY }}
       BACKFILL_SOURCE_MARI_DAYS: ${{ github.event.inputs.backfill_days || '14' }}
       BACKFILL_SOURCE_ROSS_DAYS: ${{ github.event.inputs.backfill_days || '14' }}
       BACKFILL_SOURCE_ALEX_DAYS: ${{ github.event.inputs.backfill_days || '14' }}
       BACKFILL_SOURCE_JOTA_DAYS: ${{ github.event.inputs.backfill_days || '14' }}
       BACKFILL_SOURCE_LORENA_DAYS: ${{ github.event.inputs.backfill_days || '14' }}
+      BACKFILL_SOURCE_CARO_DAYS: ${{ github.event.inputs.backfill_days || '14' }}
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
       OPENROUTER_BASE_URL: ${{ secrets.OPENROUTER_BASE_URL }}
