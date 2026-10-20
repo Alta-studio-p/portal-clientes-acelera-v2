@@ -2,12 +2,11 @@ import Link from "next/link";
 import {
   getAdminAnalytics,
   getAdminCounts,
-  getCallsNeedingAttention,
   getClientsList,
 } from "@/lib/data/admin";
-import { PageHeader, StatCard, Card, EmptyState, SectionLabel } from "@/components/ui";
-import { formatDate } from "@/lib/format";
-import { displayCallTitle } from "@/lib/call-title";
+import { PageHeader, StatCard, Card, SectionLabel } from "@/components/ui";
+import { getCallAssignmentQueue } from '@/lib/data/call-assignment';
+import { CallAssignmentQueue } from '@/components/call-assignment-queue';
 import { DailyCallsChart } from "@/components/charts/daily-calls-chart";
 import { StatusBreakdownChart } from "@/components/charts/status-breakdown-chart";
 import { UpcomingDeadlines } from "@/components/upcoming-deadlines";
@@ -28,9 +27,9 @@ export default async function AdminHomePage({
   const params = await searchParams;
   const days = RANGE_OPTIONS.some((o) => String(o.value) === params.days) ? Number(params.days) : 30;
 
-  const [counts, attentionCalls, analytics, clients] = await Promise.all([
+  const [counts, assignmentQueue, analytics, clients] = await Promise.all([
     getAdminCounts(),
-    getCallsNeedingAttention(),
+    getCallAssignmentQueue(),
     getAdminAnalytics({ days }),
     getClientsList({}),
   ]);
@@ -150,58 +149,7 @@ export default async function AdminHomePage({
         </div>
       </div>
 
-      <div className="mt-10">
-        <SectionLabel>Llamadas que requieren atención</SectionLabel>
-        {attentionCalls.length === 0 ? (
-          <EmptyState
-            title="Todo en orden"
-            description="No hay llamadas sin resumen ni sin cliente asignado."
-          />
-        ) : (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {attentionCalls.map((call) => {
-              const badges = (
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {!call.summary && (
-                    <span className="rounded-full bg-[--status-extension-bg] px-2.5 py-0.5 text-xs font-medium text-[--status-extension]">
-                      Sin resumen
-                    </span>
-                  )}
-                  {!call.client_id && (
-                    <span className="rounded-full bg-[--danger-bg] px-2.5 py-0.5 text-xs font-medium text-[--danger]">
-                      Sin cliente
-                    </span>
-                  )}
-                </div>
-              );
-
-              const content = (
-                <>
-                  <p className="line-clamp-2 text-sm font-medium text-foreground">
-                    {displayCallTitle(call)}
-                  </p>
-                  <p className="mt-1 text-xs text-muted-2">{formatDate(call.started_at)}</p>
-                  {badges}
-                </>
-              );
-
-              return call.client_id ? (
-                <Link
-                  key={call.id}
-                  href={`/admin/clients/${call.client_id}?call=${call.id}`}
-                  className="rounded-xl border border-border bg-surface p-4 transition hover:border-accent/60 hover:shadow-[0_12px_28px_-18px_rgba(15,23,42,0.45)]"
-                >
-                  {content}
-                </Link>
-              ) : (
-                <div key={call.id} className="rounded-xl border border-border bg-surface p-4">
-                  {content}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      <CallAssignmentQueue {...assignmentQueue} role="admin" />
 
       <div className="mt-8 flex gap-3">
         <Link

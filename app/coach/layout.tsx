@@ -7,6 +7,7 @@ import { AppShell } from "@/components/app-shell";
 const NAV_ITEMS = [
   { href: "/coach", label: "Mis clientes" },
   { href: "/coach/fees", label: "Mis llamadas" },
+  { href: "/coach/unassigned", label: "Sin cliente" },
 ];
 
 export default async function CoachLayout({ children }: { children: ReactNode }) {
