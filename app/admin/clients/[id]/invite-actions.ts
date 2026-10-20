@@ -68,7 +68,9 @@ export async function inviteClient(_previous: InviteState, form: FormData): Prom
     let generatedLink: string | null = null;
     if (manualLink) {
       const type = user?.email_confirmed_at ? 'recovery' : 'invite';
-      const { data, error } = await admin.auth.admin.generateLink({ type, email, options: { redirectTo, data: { full_name: client.full_name } } });
+      const { data, error } = type === 'recovery'
+        ? await admin.auth.admin.generateLink({ type, email, options: { redirectTo } })
+        : await admin.auth.admin.generateLink({ type, email, options: { redirectTo, data: { full_name: client.full_name } } });
       if (error || !data.user || !data.properties?.hashed_token) return fail('Supabase no pudo generar el enlace. Revisa la configuración de acceso o vuelve a intentarlo.');
       if ((user && data.user.id !== user.id) || data.user.email?.toLowerCase() !== email) return fail('La cuenta no coincide con el cliente. No se entregó ningún enlace.');
       user = data.user;
