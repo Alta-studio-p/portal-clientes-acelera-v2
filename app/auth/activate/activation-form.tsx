@@ -21,11 +21,17 @@ export function ActivationForm() {
         const query = new URLSearchParams(window.location.search);
         const access_token = hash.get('access_token');
         const refresh_token = hash.get('refresh_token');
+        const token_hash = hash.get('token_hash');
+        const type = hash.get('type');
         const code = query.get('code');
         // Remove credentials from the address bar before rendering the form.
         window.history.replaceState(null, '', '/auth/activate');
         if (hash.get('error') || query.get('error')) throw new Error('invalid_link');
-        if (access_token && refresh_token) {
+        if (token_hash) {
+          if (type !== 'invite' && type !== 'recovery') throw new Error('invalid_link');
+          const { error } = await supabase.auth.verifyOtp({ token_hash, type });
+          if (error) throw error;
+        } else if (access_token && refresh_token) {
           const { error } = await supabase.auth.setSession({ access_token, refresh_token });
           if (error) throw error;
         } else if (code) {
