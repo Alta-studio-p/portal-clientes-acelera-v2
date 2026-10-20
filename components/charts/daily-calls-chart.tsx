@@ -59,7 +59,7 @@ export function DailyCallsChart({
               return (
                 <div
                   key={day.date}
-                  className="group relative flex h-full min-w-[10px] flex-1 cursor-pointer items-end"
+                  className="group relative flex h-full min-w-0 flex-1 cursor-pointer items-end"
                   onMouseEnter={() => setHoveredDay(dayIndex)}
                   onMouseLeave={() => setHoveredDay(null)}
                   onFocus={() => setHoveredDay(dayIndex)}
