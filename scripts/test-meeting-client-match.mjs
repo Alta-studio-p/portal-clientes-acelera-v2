@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict';
+import {matchMeetingClient} from '../lib/meeting-client-match.mjs';
+const masters=[{name:'Alejandra Montoya',emails:['am@example.com']},{name:'Carlos Posada',aliases:['Carlos Andres Posada']},{name:'Beto'}];
+const clients=new Map(masters.map((m,i)=>[m.name,{id:String(i),full_name:m.name,email:null}]));
+const check=(meeting,id,reason)=>{
+ const match=matchMeetingClient(meeting,masters,clients);
+ assert.equal(match.client?.id??null,id);assert.equal(match.reason,reason);
+};
+check({calendar_invitees:[{email:'AM@EXAMPLE.COM'}]},'0','invitee_email');
+check({title:'Revisión de CV - Alejandra Montoya'},'0','full_name_in_title');
+check({title:'Onboarding Carlos Andrés Posada'},'1','full_name_in_title');
+check({title:'Carlos'},null,'unmatched');
+check({title:'Reunión con Beto'},null,'unmatched');
+check({calendar_invitees:[{name:'Beto'}]},null,'unmatched');
+check({title:'Impromptu',summary:'Alejandra Montoya was mentioned by another client'},null,'unmatched');
+check({title:'Alejandra Montoya y Carlos Posada'},null,'ambiguous');
+check({title:'Carlos Posada',calendar_invitees:[{email:'am@example.com'}]},null,'ambiguous');
+check({calendar_invitees:[{name:'Alejandra Montoya'}]},'0','invitee_name');
+check({title:'No es Alejandra Montoyana'},null,'unmatched');
+console.log('PASS: 11 conservative client identity cases; ambiguity and first names rejected');

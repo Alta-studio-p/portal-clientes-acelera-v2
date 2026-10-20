@@ -85,7 +85,7 @@ Production y el titular pudo iniciar sesion como administrador. Se verifico
 el resumen general cargando los datos desde Supabase en el dominio habitual.
 
 La primera prueba manual del importador leyo las seis fuentes de Fathom y
-proceso cinco reuniones del ultimo dia. Dos llamadas nuevas quedaron disponibles
+procesó cinco reuniones del ultimo dia. Dos llamadas nuevas quedaron disponibles
 en el portal sin pasar por Neon. Al revisar los logs se detectaron y corrigieron
 dos pasos opcionales que asumian que todos los clientes tenian correo.
 
@@ -97,9 +97,20 @@ no se considera suficiente. Debe verificarse despues de cada despliegue.
 No se ha detenido el importador ni eliminado Neon. No se cambiaron contrasenas
 de usuarios ni las API keys. La contrasena PostgreSQL se restablecio por el titular.
 
-## Pendientes Independientes
+## Auditoria Integral
 
-- GitHub reporta una vulnerabilidad critica en Next.js 16.3.3 y dos altas en
-  dependencias de produccion. No se actualizo el framework durante esta migracion.
-- La copia original tiene una referencia Git danada `refs/heads/main 2`.
-  Se publico desde una copia limpia para no borrar ni modificar esa referencia.
+Se actualizo Next.js a 16.4.2. La compilacion de produccion y las pruebas
+focalizadas pasan; npm audit --omit=dev no reporta vulnerabilidades.
+Persisten cinco alertas altas en dependencias de desarrollo del linter, sin
+correccion compatible disponible. No se aplico una degradacion forzada.
+
+El Git original fue reparado con una copia completa previa de sus metadatos.
+Se retiro del Git activo la referencia invalida `refs/heads/main 2` y se
+conservo en el respaldo. git fsck pasa y no se modifico .env.local.
+
+El importador conserva clientes, coaches, resumenes, proximos pasos, estados y
+fechas ya existentes. Solo asocia automaticamente por correo o nombre completo
+inequivoco; nunca por un primer nombre aislado ni por menciones en el resumen.
+Las asignaciones nuevas no sustituyen la seleccion manual de coach principal.
+La revision de historial completo dispone de un modo sin escrituras y rechaza
+una respuesta truncada por el limite de paginas. No se retranscribe audio.

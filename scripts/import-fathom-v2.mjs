@@ -1,6 +1,7 @@
 import fs from "node:fs";
+import { matchMeetingClient } from "../lib/meeting-client-match.mjs";
 
-const APPLY = process.argv.includes("--apply");
+const APPLY = process.argv.includes("--apply") && process.env.FATHOM_AUDIT_ONLY !== "true";
 const MAX_PAGES = Number(process.env.FATHOM_MAX_PAGES || 200);
 const SOURCE_DELAY_MS = Number(process.env.FATHOM_SOURCE_DELAY_MS || 1200);
 const INTERNAL_DOMAIN = "joinaceleratalent.com";
@@ -171,22 +172,6 @@ function normalizeIdentity(value) {
     .replace(/\s+/g, " ");
 }
 
-function findMasterClient({ name, email }) {
-  const normalizedEmail = normalizeEmail(email);
-  if (normalizedEmail) {
-    const byEmail = MASTER_CLIENTS.find((client) => client.emails?.includes(normalizedEmail));
-    if (byEmail) return byEmail;
-  }
-
-  const normalizedName = normalizeIdentity(name);
-  if (!normalizedName) return null;
-  return (
-    MASTER_CLIENTS.find((client) => normalizeIdentity(client.name) === normalizedName) ??
-    MASTER_CLIENTS.find((client) => client.aliases?.some((alias) => normalizeIdentity(alias) === normalizedName)) ??
-    null
-  );
-}
-
 function contextFromFirstCall(call) {
   const summary = cleanText(call.summary);
   if (!summary) return null;
@@ -198,10 +183,6 @@ function contextFromFirstCall(call) {
 function addThreeMonths(startDate) {
   const [year, month, day] = startDate.split("-").map(Number);
   return new Date(Date.UTC(year, month + 2, day)).toISOString().slice(0, 10);
-}
-
-function todayDate() {
-  return new Date().toISOString().slice(0, 10);
 }
 
 function sbHeaders(extra = {}) {
@@ -217,6 +198,7 @@ async function sb(path, options = {}) {
   const response = await fetch(`${SUPABASE_URL.replace(/\/$/, "")}/rest/v1/${path}`, {
     ...options,
     headers: sbHeaders(options.headers),
+    signal: AbortSignal.timeout(60000),
   });
   if (!response.ok) {
     const text = await response.text();
@@ -227,13 +209,15 @@ async function sb(path, options = {}) {
   return text ? JSON.parse(text) : null;
 }
 
-async function fathomGet(source, path) {
+async function fathomGet(source, path, attempt = 0) {
   const response = await fetch(`https://api.fathom.ai/external/v1/${path}`, {
     headers: { "X-Api-Key": source.apiKey },
+    signal: AbortSignal.timeout(60000),
   });
   if (response.status === 429) {
+    if (attempt >= 4) throw new Error(`Fathom ${source.key}: rate limit persists after retries.`);
     await wait(65_000);
-    return fathomGet(source, path);
+    return fathomGet(source, path, attempt + 1);
   }
   if (!response.ok) {
     const text = await response.text();
@@ -262,8 +246,17 @@ async function listMeetings(source) {
     cursor = data.next_cursor;
     if (!cursor || items.length === 0) break;
   }
-
+  if (cursor) throw new Error(`Fathom ${source.key}: history was truncated at FATHOM_MAX_PAGES; no complete sync can be claimed.`);
   return meetings;
+}
+
+async function allRows(path, order = "id") {
+  const rows = [];
+  for (let offset = 0; ; offset += 1000) {
+    const page = await sb(`${path}&order=${order}&limit=1000&offset=${offset}`);
+    rows.push(...page);
+    if (page.length < 1000) return rows;
+  }
 }
 
 async function readCoaches() {
@@ -272,7 +265,7 @@ async function readCoaches() {
 }
 
 async function readMasterClients() {
-  const rows = await sb("clients?select=id,email,full_name,context_summary");
+  const rows = await allRows("clients?select=id,email,full_name,context_summary,start_date,end_date,status");
   const byName = new Map(rows.map((client) => [normalizeIdentity(client.full_name), client]));
   const byEmail = new Map(rows.filter((client) => client.email).map((client) => [client.email.toLowerCase(), client]));
   const masterClients = new Map();
@@ -290,20 +283,10 @@ async function readMasterClients() {
 }
 
 function clientForMeeting(meeting, masterClients) {
-  for (const invitee of externalInvitees(meeting)) {
-    const master = findMasterClient(invitee);
-    const client = master ? masterClients.get(master.name) : null;
-    if (client) return client;
-  }
-  return null;
+  return matchMeetingClient({ ...meeting, external_invitees: externalInvitees(meeting) }, MASTER_CLIENTS, masterClients);
 }
 
-async function findCallByFathomId(fathomCallId) {
-  const rows = await sb(`calls?select=id,client_id&fathom_call_id=eq.${encodeURIComponent(fathomCallId)}&limit=1`);
-  return rows[0] || null;
-}
-
-async function upsertCall(row) {
+async function upsertCall(row, knownCalls) {
   if (!APPLY) return null;
 
   // Si la llamada ya existe y ya tiene cliente asignado, no se lo pisamos —
@@ -311,18 +294,28 @@ async function upsertCall(row) {
   // Sin esto, una corrección manual (ej. reasignar una llamada mal atribuida
   // a una cuenta fantasma) se revierte sola la próxima vez que esta llamada
   // caiga dentro de la ventana de backfill del cron nocturno.
-  const existing = await findCallByFathomId(row.fathom_call_id);
+  const existing = knownCalls.get(row.fathom_call_id);
   const payload = { ...row };
+  payload.raw_metadata = { ...existing?.raw_metadata, ...row.raw_metadata };
   if (existing?.client_id) {
     delete payload.client_id;
+    payload.raw_metadata.client_match_reason = "preserved_existing";
   }
+  if (existing?.coach_id) {
+    delete payload.coach_id;
+    if (existing.raw_metadata?.source_key) payload.raw_metadata.source_key = existing.raw_metadata.source_key;
+  }
+  if (cleanText(existing?.summary)) delete payload.summary;
+  if (cleanText(existing?.next_steps)) delete payload.next_steps;
 
   const rows = await sb("calls?on_conflict=fathom_call_id", {
     method: "POST",
     headers: { Prefer: "resolution=merge-duplicates,return=representation" },
     body: JSON.stringify(payload),
   });
-  return rows[0] || null;
+  const saved = rows[0] || null;
+  if (saved) knownCalls.set(row.fathom_call_id, saved);
+  return saved;
 }
 
 async function upsertParticipants(callId, meeting) {
@@ -350,14 +343,14 @@ async function ensureAssignment(coachId, clientId) {
   if (!APPLY || !coachId || !clientId) return;
   await sb("coach_client_assignments?on_conflict=coach_id,client_id", {
     method: "POST",
-    headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-    body: JSON.stringify({ coach_id: coachId, client_id: clientId, is_primary: true }),
+    headers: { Prefer: "resolution=ignore-duplicates,return=minimal" },
+    body: JSON.stringify({ coach_id: coachId, client_id: clientId, is_primary: false }),
   });
 }
 
 async function refreshClientContexts() {
   if (!APPLY) return 0;
-  const clients = await sb("clients?select=id,context_summary");
+  const clients = await allRows("clients?select=id,context_summary");
   let updated = 0;
 
   for (const client of clients) {
@@ -390,8 +383,8 @@ async function refreshProgramDates(masterClients) {
   const clientIds = [...masterClients.values()].map((client) => client.id);
   if (!clientIds.length) return 0;
 
-  const calls = await sb(
-    `calls?select=client_id,started_at&client_id=in.(${clientIds.join(",")})&started_at=not.is.null&order=started_at.asc`,
+  const calls = await allRows(
+    `calls?select=id,client_id,started_at&client_id=in.(${clientIds.join(",")})&started_at=not.is.null`, "started_at.asc,id.asc",
   );
   const firstCallByClient = new Map();
   for (const call of calls) {
@@ -400,13 +393,16 @@ async function refreshProgramDates(masterClients) {
 
   let updated = 0;
   for (const client of masterClients.values()) {
-    const startDate = firstCallByClient.get(client.id) ?? null;
+    const startDate = client.start_date || firstCallByClient.get(client.id) || null;
     const endDate = startDate ? addThreeMonths(startDate) : null;
-    const status = endDate && endDate < todayDate() ? "inactive" : "active";
+    const patch = {};
+    if (!client.start_date && startDate) patch.start_date = startDate;
+    if (!client.end_date && endDate) patch.end_date = endDate;
+    if (!Object.keys(patch).length) continue;
     await sb(`clients?id=eq.${encodeURIComponent(client.id)}`, {
       method: "PATCH",
       headers: { Prefer: "return=minimal" },
-      body: JSON.stringify({ start_date: startDate, end_date: endDate, status }),
+      body: JSON.stringify(patch),
     });
     updated += 1;
   }
@@ -416,6 +412,8 @@ async function refreshProgramDates(masterClients) {
 async function main() {
   const coaches = await readCoaches();
   const masterClients = await readMasterClients();
+  const knownCalls = new Map((await allRows("calls?select=id,fathom_call_id,client_id,coach_id,summary,next_steps,raw_metadata")).map(call => [call.fathom_call_id, call]));
+  const seenIds = new Set();
   const stats = {
     meetings: 0,
     withClient: 0,
@@ -423,18 +421,21 @@ async function main() {
     withSummary: 0,
     imported: 0,
     assignments: 0,
+    missing: 0,
+    ambiguous: 0,
   };
 
   for (const source of fathomSources) {
     const coach = coaches.get(source.key);
     if (!coach) {
-      console.log(`Sin coach configurado para ${source.key}; se importaran llamadas sin coach_id.`);
+      throw new Error(`Sin coach configurado para ${source.key}; se detiene la fuente para no crear llamadas sin coach.`);
     }
 
     await wait(SOURCE_DELAY_MS);
     const meetings = await listMeetings(source);
     console.log(`${source.key}: ${meetings.length} reuniones leidas`);
     stats.meetings += meetings.length;
+    let sourceMissing = 0;
 
     for (const meeting of meetings) {
       const rawTitle = cleanText(meeting.meeting_title || meeting.title);
@@ -443,7 +444,15 @@ async function main() {
         continue;
       }
 
-      const client = clientForMeeting(meeting, masterClients);
+      if (!meeting.recording_id) throw new Error(`Fathom ${source.key}: meeting without recording_id.`);
+      const matched = clientForMeeting(meeting, masterClients);
+      const client = matched.client;
+      if (matched.reason === "ambiguous") stats.ambiguous += 1;
+      if (!knownCalls.has(String(meeting.recording_id))) {
+        if (!seenIds.has(String(meeting.recording_id))) stats.missing += 1;
+        sourceMissing += 1;
+      }
+      seenIds.add(String(meeting.recording_id));
       if (client?.id) stats.withClient += 1;
       else stats.withoutClient += 1;
 
@@ -473,10 +482,12 @@ async function main() {
           recording_start_time: meeting.recording_start_time,
           recording_end_time: meeting.recording_end_time,
           external_invitees: externalInvitees(meeting),
+          recorded_by: meeting.recorded_by ?? null,
+          client_match_reason: matched.reason,
         },
       };
 
-      const savedCall = await upsertCall(row);
+      const savedCall = await upsertCall(row, knownCalls);
       if (APPLY) {
         stats.imported += 1;
         await upsertParticipants(savedCall?.id, meeting);
@@ -485,12 +496,14 @@ async function main() {
         // adivinar — evita crear asignaciones coach-cliente con un cliente
         // equivocado.
         const finalClientId = savedCall?.client_id ?? row.client_id;
-        if (coach?.id && finalClientId) {
-          await ensureAssignment(coach.id, finalClientId);
+        const finalCoachId = savedCall?.coach_id ?? row.coach_id;
+        if (finalCoachId && finalClientId) {
+          await ensureAssignment(finalCoachId, finalClientId);
           stats.assignments += 1;
         }
       }
     }
+    console.log(`${source.key}: ${sourceMissing} grabaciones faltantes detectadas en Supabase`);
   }
 
   const contextsUpdated = await refreshClientContexts();
@@ -503,7 +516,13 @@ async function main() {
   console.log(APPLY ? `Llamadas insertadas/actualizadas: ${stats.imported}` : "Modo prueba: no se modifico Supabase");
   console.log(APPLY ? `Asignaciones coach-cliente tocadas: ${stats.assignments}` : "");
   console.log(APPLY ? `Contextos de cliente creados: ${contextsUpdated}` : "");
-  console.log(APPLY ? `Fechas y estado recalculados: ${datesUpdated}` : "");
+  console.log(`Grabaciones ausentes al comenzar: ${stats.missing}; coincidencias ambiguas: ${stats.ambiguous}`);
+  if (APPLY) {
+    const missing = [...seenIds].filter(id => !knownCalls.has(id));
+    if (missing.length) throw new Error(`${missing.length} Fathom recordings still absent after import.`);
+    console.log(`Cobertura verificada: ${seenIds.size} grabaciones unicas de Fathom presentes en Supabase.`);
+  }
+  console.log(APPLY ? `Fechas vacias completadas (sin cambiar estados): ${datesUpdated}` : "");
 }
 
 main().catch((error) => {

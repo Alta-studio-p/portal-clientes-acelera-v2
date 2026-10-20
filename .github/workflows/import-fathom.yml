@@ -7,15 +7,20 @@ on:
   workflow_dispatch:
     inputs:
       backfill_days:
-        description: "Backfill profundo (días hacia atrás) para TODAS las fuentes en esta corrida manual. Vacío = 14 (el default de siempre)."
+        description: "Dias hacia atras para todas las fuentes. 0 = historial completo; vacio = 14."
         required: false
         default: ""
+      audit_only:
+        description: "Solo comparar con Fathom, sin guardar datos ni enriquecer."
+        type: boolean
+        default: false
 
 jobs:
   import:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
+      FATHOM_AUDIT_ONLY: ${{ github.event.inputs.audit_only || 'false' }}
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       FATHOM_SOURCE_MARI_API_KEY: ${{ secrets.FATHOM_SOURCE_MARI_API_KEY }}
@@ -48,25 +53,26 @@ jobs:
         run: node scripts/import-fathom-v2.mjs --apply
 
       - name: Traduce resúmenes y próximos pasos al español
-        if: ${{ env.OPENROUTER_API_KEY != '' || env.LLM_API_KEY != '' }}
+        if: ${{ env.FATHOM_AUDIT_ONLY != 'true' && (env.OPENROUTER_API_KEY != '' || env.LLM_API_KEY != '') }}
         continue-on-error: true
         run: node scripts/translate-call-texts-es.mjs --apply
 
       - name: Normaliza nombres de cliente (determinístico)
+        if: ${{ env.FATHOM_AUDIT_ONLY != 'true' }}
         run: node scripts/normalize-client-names.mjs --apply
 
       - name: Enriquece nombres de cliente con LLM
-        if: ${{ env.OPENROUTER_API_KEY != '' || env.LLM_API_KEY != '' }}
+        if: ${{ env.FATHOM_AUDIT_ONLY != 'true' && (env.OPENROUTER_API_KEY != '' || env.LLM_API_KEY != '') }}
         continue-on-error: true
         run: node scripts/enrich-client-names.mjs --apply
 
       - name: Enriquece títulos de llamada con LLM
-        if: ${{ env.OPENROUTER_API_KEY != '' || env.LLM_API_KEY != '' }}
+        if: ${{ env.FATHOM_AUDIT_ONLY != 'true' && (env.OPENROUTER_API_KEY != '' || env.LLM_API_KEY != '') }}
         continue-on-error: true
         run: node scripts/enrich-call-titles.mjs --apply
 
       - name: Enriquece rango salarial con LLM
-        if: ${{ env.OPENROUTER_API_KEY != '' || env.LLM_API_KEY != '' }}
+        if: ${{ env.FATHOM_AUDIT_ONLY != 'true' && (env.OPENROUTER_API_KEY != '' || env.LLM_API_KEY != '') }}
         continue-on-error: true
         run: node scripts/enrich-salary-range.mjs --apply
 
