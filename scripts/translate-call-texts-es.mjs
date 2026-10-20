@@ -80,6 +80,7 @@ async function sb(path, options = {}) {
   const response = await fetch(`${SUPABASE_URL.replace(/\/$/, "")}/rest/v1/${path}`, {
     ...options,
     headers: sbHeaders(options.headers),
+    signal: AbortSignal.timeout(60000),
   });
   if (!response.ok) {
     const text = await response.text();
@@ -90,9 +91,18 @@ async function sb(path, options = {}) {
   return text ? JSON.parse(text) : null;
 }
 
+async function allRows(path) {
+  const rows = [];
+  for (let offset = 0; ; offset += 1000) {
+    const page = await sb(`${path}&limit=1000&offset=${offset}`);
+    rows.push(...page);
+    if (page.length < 1000) return rows;
+  }
+}
+
 async function fetchCalls() {
-  const rows = await sb(
-    "calls?select=id,client_id,title,display_title,started_at,summary,next_steps,raw_metadata&or=(summary.not.is.null,next_steps.not.is.null)&order=started_at.asc.nullslast"
+  const rows = await allRows(
+    "calls?select=id,client_id,title,display_title,started_at,summary,next_steps,raw_metadata&or=(summary.not.is.null,next_steps.not.is.null)&order=started_at.asc.nullslast,id.asc"
   );
   const sourceRows = ONLY_SOURCE
     ? rows.filter((call) => String(call.raw_metadata?.source_key || "").toLowerCase() === ONLY_SOURCE)
@@ -128,6 +138,7 @@ ${JSON.stringify(
 
   const response = await fetch(`${BASE_URL.replace(/\/$/, "")}/chat/completions`, {
     method: "POST",
+    signal: AbortSignal.timeout(60000),
     headers: {
       Authorization: `Bearer ${LLM_API_KEY}`,
       "Content-Type": "application/json",
@@ -165,10 +176,11 @@ async function updateCall(call, translated) {
 }
 
 async function refreshClientContexts() {
-  const clients = await sb("clients?select=id");
+  const clients = await allRows("clients?select=id,context_summary&order=id.asc");
   let updated = 0;
 
   for (const client of clients) {
+    if (cleanText(client.context_summary)) continue;
     const calls = await sb(
       `calls?select=id,title,started_at,summary&client_id=eq.${encodeURIComponent(
         client.id
@@ -235,7 +247,7 @@ async function main() {
 
   if (APPLY) {
     const contexts = await refreshClientContexts();
-    console.log(`Contextos de cliente refrescados: ${contexts}`);
+    console.log(`Contextos vacios completados: ${contexts}`);
   } else {
     console.log("Modo prueba. Ejecuta con --apply para actualizar Supabase. Usa --all para revisar todas las llamadas.");
   }
