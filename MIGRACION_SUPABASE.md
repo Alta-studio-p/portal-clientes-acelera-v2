@@ -144,9 +144,16 @@ identidad exacta. No se cambiaron asociaciones previas ni el coach principal.
 | Ross | 164 | 24 |
 
 Quedan 189 grabaciones sin cliente identificado, incluidas sesiones internas
-y personas fuera de la lista maestra. No se asociaron por primeros nombres ni
-se crearon fichas o cuentas sin confirmar su identidad. Tres grabaciones carecen
-de resumen disponible y no se invento contenido para ellas.
+y personas fuera de la lista maestra. Por indicacion expresa del titular se
+conserva la lista actual de 66 clientes: no se crean fichas ni invitaciones para
+las personas detectadas fuera de ella. No se asocian por primeros nombres.
+Tres grabaciones carecen de resumen: se consulto tambien el endpoint directo
+de resumen de Fathom y devolvio HTTP 200 sin texto en los tres casos.
+No se invento contenido ni se retranscribio audio.
+
+Dos perfiles nuevos que seguian en ingles se cotejaron con su resumen original
+de Fathom. Solo tras confirmar la coincidencia exacta y ausencia de ediciones
+manuales se actualizaron con el resumen traducido ya guardado en Supabase.
 
 Las 66 fichas y consultas de administracion cargaron correctamente. Se probaron
 los seis roles de coach y el perfil cliente con sesiones simuladas. Las once
@@ -156,3 +163,9 @@ despues de validar que la clave publica utilizada era valida.
 La sincronizacion diaria conserva su horario existente de 01:00 UTC
 (20:00 de Colombia). Su ventana normal cubre 14 dias; el historial completo
 puede revisarse manualmente con backfill_days=0 y audit_only=true.
+
+Las seis claves de produccion en GitHub fueron verificadas. La clave de Jota
+de la copia local sigue siendo antigua (HTTP 401); no se sustituyo ni se extrajo
+la clave privada vigente desde GitHub. Esto no afecta al portal ni al trabajo
+automatico. Hasta renovarla en privado, las importaciones manuales de las seis
+fuentes deben lanzarse desde GitHub Actions, no desde .env.local.
