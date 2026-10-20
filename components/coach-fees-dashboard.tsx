@@ -12,8 +12,8 @@ const field = 'h-11 w-full rounded-md border border-border bg-surface px-3 text-
 const iconButton = 'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition hover:bg-surface-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent';
 const number = (value: number) => new Intl.NumberFormat('es-CO', { maximumFractionDigits: 2 }).format(value);
 
-export function CoachFeesDashboard({ coaches, coachId, month, rows, clients, readOnly = false }: {
-  coaches: Option[]; coachId: string; month: string; rows: FeeRow[]; clients: Option[]; readOnly?: boolean;
+export function CoachFeesDashboard({ coaches, coachId, month, rows, clients, readOnly = false, basePath, clientBasePath }: {
+  coaches: Option[]; coachId: string; month: string; rows: FeeRow[]; clients: Option[]; readOnly?: boolean; basePath?: string; clientBasePath?: string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -33,7 +33,7 @@ export function CoachFeesDashboard({ coaches, coachId, month, rows, clients, rea
   const unpriced = filtered.filter(r => r.amount === null).length;
   const monthLabel = new Intl.DateTimeFormat('es-CO', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${month}-01T12:00:00Z`));
   function navigate(nextCoach: string, nextMonth: string) {
-    startTransition(() => router.push(readOnly ? `/coach/fees?month=${nextMonth}` : `/admin/fees?coach=${encodeURIComponent(nextCoach)}&month=${nextMonth}`));
+    startTransition(() => router.push(readOnly ? `${basePath ?? '/coach/fees'}?month=${nextMonth}` : `/admin/fees?coach=${encodeURIComponent(nextCoach)}&month=${nextMonth}`));
   }
   function stepMonth(step: number) {
     const [year, m] = month.split('-').map(Number);
@@ -95,7 +95,7 @@ export function CoachFeesDashboard({ coaches, coachId, month, rows, clients, rea
         <tbody className="divide-y divide-border">
           {filtered.map(r => <tr key={r.call_id ?? r.id} className="even:bg-background/70 hover:bg-accent-soft/40">
             <td className="whitespace-nowrap px-4 py-3.5 tabular-nums">{feeDate(r.service_date)}</td>
-            <td className="max-w-52 px-4 py-3.5 font-medium">{r.client_id ? <Link href={`/${readOnly ? 'coach' : 'admin'}/clients/${r.client_id}`} className="hover:text-accent hover:underline">{r.client_name}</Link> : <span className="text-muted">{r.client_name}</span>}</td>
+            <td className="max-w-52 px-4 py-3.5 font-medium">{r.client_id ? <Link href={`${clientBasePath ?? `/${readOnly ? 'coach' : 'admin'}/clients`}/${r.client_id}`} className="hover:text-accent hover:underline">{r.client_name}</Link> : <span className="text-muted">{r.client_name}</span>}</td>
             <td className="min-w-48 max-w-80 px-4 py-3.5"><span className="line-clamp-2" title={r.topic}>{r.topic}</span>{!r.call_id && <span className="mt-1 block text-xs text-muted">Actividad manual</span>}</td>
             <td className="px-4 py-3.5 text-right tabular-nums">{r.hours === null ? '—' : number(r.hours)}</td>
             <td className="whitespace-nowrap px-4 py-3.5 text-right font-medium tabular-nums">{r.amount === null ? '—' : money(r.amount)}</td>

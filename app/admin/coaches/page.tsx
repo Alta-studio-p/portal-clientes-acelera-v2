@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Eye } from "lucide-react";
 import { getCoachesWithClients, getCoachCallCounts } from "@/lib/data/admin";
 import { PageHeader, Card, EmptyState, SectionLabel } from "@/components/ui";
 import { StatusBadge } from "@/components/status-badge";
@@ -132,7 +132,10 @@ export default async function AdminCoachesPage({
                   </h2>
                   <p className="text-sm text-muted">{coach.email}</p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link href={`/preview/coaches/${coach.id}`} className="inline-flex min-h-11 items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-accent hover:bg-accent-soft focus-visible:outline-2 focus-visible:outline-accent">
+                    <Eye size={16} aria-hidden="true" />Ver como coach
+                  </Link>
                   <Link href={`/admin/fees?coach=${coach.id}`} className="rounded-md border border-border px-3 py-2 text-sm font-medium text-accent hover:bg-accent-soft">
                     Llamadas
                   </Link>

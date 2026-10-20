@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import type { NavItem } from "@/components/app-shell";
 
 function isActive(pathname: string, href: string): boolean {
-  if (href === "/admin" || href === "/coach" || href === "/portal") {
+  if (href === "/admin" || href === "/coach" || href === "/portal" || /^\/preview\/coaches\/[^/]+$/.test(href)) {
     return pathname === href;
   }
   return pathname === href || pathname.startsWith(`${href}/`);
