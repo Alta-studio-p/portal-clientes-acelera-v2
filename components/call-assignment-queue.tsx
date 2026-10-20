@@ -27,7 +27,7 @@ function AssignmentCard({ call, clients, role, onAssigned }: { call: AttentionCa
       {!call.summary && <span>Sin resumen</span>}
     </div>
     {call.summary && <details className="mt-3 text-sm">
-      <summary className="cursor-pointer py-2 text-accent focus-visible:outline-2 focus-visible:outline-accent">Ver resumen</summary>
+      <summary className="min-h-11 cursor-pointer py-3 text-accent focus-visible:outline-2 focus-visible:outline-accent">Ver resumen</summary>
       <div className="mt-2 max-h-72 overflow-auto break-words border-t border-border pt-3"><MarkdownLite text={call.summary} /></div>
     </details>}
     {state.success ? <p role="status" className="mt-4 flex items-center gap-2 text-sm text-accent"><Check size={16} />Cliente asignado</p> : call.client_id ?
