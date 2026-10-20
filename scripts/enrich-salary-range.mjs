@@ -72,7 +72,7 @@ async function fetchClients() {
     throw new Error(`Supabase select failed: ${res.status} ${body}`);
   }
   const clients = await res.json();
-  return clients.filter((c) => !c.desired_salary_range && !skip.has(c.email.trim().toLowerCase()));
+  return clients.filter((c) => !c.desired_salary_range && !skip.has(String(c.email ?? "").trim().toLowerCase()));
 }
 
 async function fetchCallSummaries(clientId) {

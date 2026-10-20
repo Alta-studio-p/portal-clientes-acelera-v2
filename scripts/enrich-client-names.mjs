@@ -65,8 +65,8 @@ async function fetchClientsWithoutRealName() {
   );
   return clients.filter(
     (c) =>
-      (!c.full_name || c.full_name.trim().toLowerCase() === c.email.trim().toLowerCase()) &&
-      !skip.has(c.email.trim().toLowerCase())
+      (!c.full_name || c.full_name.trim().toLowerCase() === String(c.email ?? "").trim().toLowerCase()) &&
+      !skip.has(String(c.email ?? "").trim().toLowerCase())
   );
 }
 

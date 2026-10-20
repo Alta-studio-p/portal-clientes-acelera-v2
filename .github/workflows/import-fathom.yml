@@ -71,7 +71,4 @@ jobs:
         run: node scripts/enrich-salary-range.mjs --apply
 
       - name: Comprueba la base operativa de Supabase
-        run: >-
-          curl --fail --silent --show-error
-          --header "Authorization: Bearer $CRON_SECRET"
-          https://portal-clientes-acelera-v2.vercel.app/api/internal/database-health
+        run: node scripts/check-database-health.mjs

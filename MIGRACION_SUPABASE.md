@@ -6,7 +6,10 @@ Fecha de verificacion: 2026-10-20.
 
 Los datos de las tablas de la aplicacion estan presentes en Supabase y fueron
 comparados por identificador y contenido contra Neon. La plataforma desplegada
-todavia consulta Neon hasta publicar y verificar el cambio de conexion.
+ya consulta y escribe en Supabase. Neon se conserva intacto como respaldo.
+
+Los conteos de esta tabla corresponden al respaldo previo al cambio. Las nuevas
+sincronizaciones pueden aumentar los totales operativos de Supabase.
 
 | Tabla | Neon | Supabase |
 | --- | ---: | ---: |
@@ -75,11 +78,28 @@ El cambio preparado sustituye la copia a Neon por una comprobacion protegida
 El importador sigue escribiendo en Supabase con API keys, que no cambian al
 restablecer la contrasena PostgreSQL. Supabase Auth conserva sus usuarios y claves.
 
-## Pendiente Antes De Publicar
+## Publicacion Y Operacion
 
-1. Publicar y verificar la ruta protegida de salud y el acceso en navegador.
-2. Comprobar que el workflow diario pasa sin copiar datos a Neon.
-3. Mantener Neon temporalmente como respaldo; no eliminarlo automaticamente.
+El commit inicial de la migracion es `88244e1`. Vercel lo marco Ready en
+Production y el titular pudo iniciar sesion como administrador. Se verifico
+el resumen general cargando los datos desde Supabase en el dominio habitual.
 
-No se ha detenido el importador ni se ha desconectado la plataforma actual.
-No se ha desplegado aun ningun cambio de proveedor de base de datos.
+La primera prueba manual del importador leyo las seis fuentes de Fathom y
+proceso cinco reuniones del ultimo dia. Dos llamadas nuevas quedaron disponibles
+en el portal sin pasar por Neon. Al revisar los logs se detectaron y corrigieron
+dos pasos opcionales que asumian que todos los clientes tenian correo.
+
+La ruta de salud queda fuera de la redireccion de login y exige su propio
+Bearer CRON_SECRET. Su comprobador rechaza redirecciones, respuestas HTML,
+proveedores distintos de Supabase y conteos invalidos; un HTTP 200 por si solo
+no se considera suficiente. Debe verificarse despues de cada despliegue.
+
+No se ha detenido el importador ni eliminado Neon. No se cambiaron contrasenas
+de usuarios ni las API keys. La contrasena PostgreSQL se restablecio por el titular.
+
+## Pendientes Independientes
+
+- GitHub reporta una vulnerabilidad critica en Next.js 16.3.3 y dos altas en
+  dependencias de produccion. No se actualizo el framework durante esta migracion.
+- La copia original tiene una referencia Git danada `refs/heads/main 2`.
+  Se publico desde una copia limpia para no borrar ni modificar esa referencia.
