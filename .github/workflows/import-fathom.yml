@@ -15,6 +15,10 @@ on:
         type: boolean
         default: false
 
+concurrency:
+  group: fathom-supabase-import
+  cancel-in-progress: false
+
 jobs:
   import:
     runs-on: ubuntu-latest
@@ -48,6 +52,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
+
+      - name: Comprueba coincidencias y proteccion de datos manuales
+        run: |
+          node scripts/test-meeting-client-match.mjs
+          node scripts/test-import-preservation.mjs
+          node scripts/test-translation-preservation.mjs
 
       - name: Import de llamadas nuevas (Fathom -> Supabase)
         run: node scripts/import-fathom-v2.mjs --apply
