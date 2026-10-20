@@ -114,3 +114,45 @@ inequivoco; nunca por un primer nombre aislado ni por menciones en el resumen.
 Las asignaciones nuevas no sustituyen la seleccion manual de coach principal.
 La revision de historial completo dispone de un modo sin escrituras y rechaza
 una respuesta truncada por el limite de paginas. No se retranscribe audio.
+
+La traduccion conserva por campo el texto ya escrito en espanol. Solo puede
+refrescar un perfil generado si sigue siendo una copia exacta del resumen de
+origen anterior a la traduccion; cualquier edicion manual impide reemplazarlo.
+La ejecucion programada prueba estas invariantes y no admite dos importaciones
+simultaneas dentro de su grupo de concurrencia.
+
+## Historial Completo Verificado
+
+La primera auditoria completa detecto 232 grabaciones historicas ausentes de
+Caro. Se importaron con sus enlaces sin eliminar registros. La segunda auditoria
+del 20 de octubre confirmo cero grabaciones faltantes en las seis cuentas.
+Se excluyen las cinco demos de Fathom, que no son sesiones reales de clientes.
+
+Supabase contiene 646 grabaciones y la vista de deduplicacion presenta 633
+sesiones. No hay IDs de Fathom duplicados ni llamadas sin coach o sin enlace.
+Se completaron 129 asociaciones de llamadas: 125 del historial de Caro, dos de
+Ross con nombre completo en el titulo y dos de Jota revisadas manualmente con
+identidad exacta. No se cambiaron asociaciones previas ni el coach principal.
+
+| Coach | Grabaciones | Clientes vinculados |
+| --- | ---: | ---: |
+| Alex | 62 | 12 |
+| Caro | 255 | 44 |
+| Jota | 74 | 9 |
+| Lorena | 29 | 4 |
+| Mari | 62 | 11 |
+| Ross | 164 | 24 |
+
+Quedan 189 grabaciones sin cliente identificado, incluidas sesiones internas
+y personas fuera de la lista maestra. No se asociaron por primeros nombres ni
+se crearon fichas o cuentas sin confirmar su identidad. Tres grabaciones carecen
+de resumen disponible y no se invento contenido para ellas.
+
+Las 66 fichas y consultas de administracion cargaron correctamente. Se probaron
+los seis roles de coach y el perfil cliente con sesiones simuladas. Las once
+tablas/vistas operativas rechazaron el acceso anonimo por la API (HTTP 401),
+despues de validar que la clave publica utilizada era valida.
+
+La sincronizacion diaria conserva su horario existente de 01:00 UTC
+(20:00 de Colombia). Su ventana normal cubre 14 dias; el historial completo
+puede revisarse manualmente con backfill_days=0 y audit_only=true.

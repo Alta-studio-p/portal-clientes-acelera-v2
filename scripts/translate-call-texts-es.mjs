@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { contextFromCall } from "../lib/call-context.mjs";
 
 const APPLY = process.argv.includes("--apply");
 const CHECK_ONLY = process.argv.includes("--check");
@@ -163,9 +164,12 @@ ${JSON.stringify(
 
 async function updateCall(call, translated) {
   const patch = {
-    display_title: cleanText(translated.display_title) || call.display_title || null,
-    summary: cleanText(translated.summary) || call.summary || null,
-    next_steps: cleanText(translated.next_steps) || call.next_steps || null,
+    display_title: call.display_title && !hasEnglishSignals(call.display_title)
+      ? call.display_title : cleanText(translated.display_title) || call.display_title || null,
+    summary: hasEnglishSignals(call.summary)
+      ? cleanText(translated.summary) || call.summary || null : call.summary || null,
+    next_steps: hasEnglishSignals(call.next_steps)
+      ? cleanText(translated.next_steps) || call.next_steps || null : call.next_steps || null,
   };
 
   await sb(`calls?id=eq.${encodeURIComponent(call.id)}`, {
@@ -175,12 +179,16 @@ async function updateCall(call, translated) {
   });
 }
 
-async function refreshClientContexts() {
-  const clients = await allRows("clients?select=id,context_summary&order=id.asc");
+async function refreshClientContexts(translatedCalls) {
+  const clients = await allRows("clients?select=id,context_summary,context_source_call_id&order=id.asc");
   let updated = 0;
 
   for (const client of clients) {
-    if (cleanText(client.context_summary)) continue;
+    if (cleanText(client.context_summary)) {
+      const original = translatedCalls.get(client.context_source_call_id);
+      // Only refresh an exact generated copy; an edited profile is never replaced.
+      if (!original || client.context_summary !== contextFromCall(original)) continue;
+    }
     const calls = await sb(
       `calls?select=id,title,started_at,summary&client_id=eq.${encodeURIComponent(
         client.id
@@ -189,8 +197,6 @@ async function refreshClientContexts() {
     const firstCall = calls[0];
     if (!firstCall?.summary) continue;
 
-    const title = cleanText(firstCall.title) || "primera llamada";
-    const date = firstCall.started_at ? String(firstCall.started_at).slice(0, 10) : "fecha no disponible";
     await sb(`clients?id=eq.${encodeURIComponent(client.id)}`, {
       method: "PATCH",
       headers: { Prefer: "return=minimal" },
@@ -198,7 +204,7 @@ async function refreshClientContexts() {
         first_call_id: firstCall.id,
         context_source_call_id: firstCall.id,
         context_generated_at: new Date().toISOString(),
-        context_summary: `Contexto general creado desde la primera llamada registrada (${date}, ${title}).\n\n${firstCall.summary}`,
+        context_summary: contextFromCall(firstCall),
       }),
     });
     updated += 1;
@@ -221,6 +227,7 @@ async function runPool(items, worker) {
 
 async function main() {
   const calls = await fetchCalls();
+  const translatedCalls = new Map();
   console.log(
     TRANSLATE_ALL
       ? `${calls.length} llamadas serán revisadas/traducidas al español.`
@@ -238,7 +245,10 @@ async function main() {
     try {
       const translated = await translateCall(call);
       console.log(`${index + 1}/${calls.length} ${call.id}: ${translated.display_title || call.display_title || call.title}`);
-      if (APPLY) await updateCall(call, translated);
+      if (APPLY) {
+        await updateCall(call, translated);
+        translatedCalls.set(call.id, call);
+      }
       await wait(DELAY_MS);
     } catch (error) {
       console.error(`Error en ${call.id}:`, error.message);
@@ -246,8 +256,8 @@ async function main() {
   });
 
   if (APPLY) {
-    const contexts = await refreshClientContexts();
-    console.log(`Contextos vacios completados: ${contexts}`);
+    const contexts = await refreshClientContexts(translatedCalls);
+    console.log(`Contextos vacios o generados sin ediciones actualizados: ${contexts}`);
   } else {
     console.log("Modo prueba. Ejecuta con --apply para actualizar Supabase. Usa --all para revisar todas las llamadas.");
   }

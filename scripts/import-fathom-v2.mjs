@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import { matchMeetingClient } from "../lib/meeting-client-match.mjs";
+import { contextFromCall } from "../lib/call-context.mjs";
 
 const APPLY = process.argv.includes("--apply") && process.env.FATHOM_AUDIT_ONLY !== "true";
 const MAX_PAGES = Number(process.env.FATHOM_MAX_PAGES || 200);
@@ -170,14 +171,6 @@ function normalizeIdentity(value) {
     .replace(/[^a-z0-9]+/g, " ")
     .trim()
     .replace(/\s+/g, " ");
-}
-
-function contextFromFirstCall(call) {
-  const summary = cleanText(call.summary);
-  if (!summary) return null;
-  const title = cleanText(call.title) || "primera llamada";
-  const date = call.started_at ? String(call.started_at).slice(0, 10) : "fecha no disponible";
-  return `Contexto general creado desde la primera llamada registrada (${date}, ${title}).\n\n${summary}`;
 }
 
 function addThreeMonths(startDate) {
@@ -359,7 +352,7 @@ async function refreshClientContexts() {
       `calls?select=id,title,started_at,summary&client_id=eq.${encodeURIComponent(client.id)}&summary=not.is.null&order=started_at.asc.nullslast&limit=1`,
     );
     const firstCall = calls[0];
-    const context = contextFromFirstCall(firstCall || {});
+    const context = contextFromCall(firstCall || {});
     if (!context) continue;
 
     await sb(`clients?id=eq.${encodeURIComponent(client.id)}`, {
