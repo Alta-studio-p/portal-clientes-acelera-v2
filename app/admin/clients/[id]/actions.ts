@@ -4,7 +4,6 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth";
 import { getSql } from "@/lib/db";
-import { createAdminClient } from "@/lib/supabase/server";
 import type { ClientStatus } from "@/lib/supabase/types";
 
 const CLIENT_STATUSES: ClientStatus[] = ["active", "inactive", "extension"];
@@ -51,13 +50,6 @@ export async function saveClientDriveFolder(formData: FormData) {
   }
 
   try {
-    const supabase = await createAdminClient();
-    const { error } = await supabase
-      .from("clients")
-      .update({ drive_folder_id: folderId, drive_folder_url: folderUrl(folderId) })
-      .eq("id", clientId);
-    if (error) throw error;
-
     const sql = getSql();
     await sql`
       update public.clients
@@ -79,13 +71,6 @@ export async function removeClientDriveFolder(formData: FormData) {
   if (!clientId) redirect("/admin/clients");
 
   try {
-    const supabase = await createAdminClient();
-    const { error } = await supabase
-      .from("clients")
-      .update({ drive_folder_id: null, drive_folder_url: null })
-      .eq("id", clientId);
-    if (error) throw error;
-
     const sql = getSql();
     await sql`
       update public.clients
@@ -111,10 +96,6 @@ export async function updateClientStatus(formData: FormData) {
   }
 
   try {
-    const supabase = await createAdminClient();
-    const { error } = await supabase.from("clients").update({ status }).eq("id", clientId);
-    if (error) throw error;
-
     const sql = getSql();
     await sql`
       update public.clients

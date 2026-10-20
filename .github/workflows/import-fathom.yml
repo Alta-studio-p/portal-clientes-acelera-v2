@@ -70,9 +70,8 @@ jobs:
         continue-on-error: true
         run: node scripts/enrich-salary-range.mjs --apply
 
-      - name: Sincroniza Supabase hacia Neon
+      - name: Comprueba la base operativa de Supabase
         run: >-
           curl --fail --silent --show-error
-          --request POST
           --header "Authorization: Bearer $CRON_SECRET"
-          https://portal-clientes-acelera-v2.vercel.app/api/internal/sync-supabase-neon
+          https://portal-clientes-acelera-v2.vercel.app/api/internal/database-health

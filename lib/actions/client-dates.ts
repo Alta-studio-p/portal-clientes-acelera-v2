@@ -4,7 +4,6 @@ import { revalidatePath } from "next/cache";
 import { requireProfile } from "@/lib/auth";
 import { getSql } from "@/lib/db";
 import { getClientIdsForCoach, getCoachByProfileId } from "@/lib/data/client-detail";
-import { createAdminClient } from "@/lib/supabase/server";
 
 export interface UpdateDatesState {
   error: string | null;
@@ -47,13 +46,6 @@ export async function updateClientDates(
   }
 
   try {
-    const supabase = await createAdminClient();
-    const { error } = await supabase
-      .from("clients")
-      .update({ start_date: startDateRaw || null, end_date: endDateRaw || null })
-      .eq("id", clientId);
-    if (error) throw error;
-
     const sql = getSql();
     await sql`
       update public.clients

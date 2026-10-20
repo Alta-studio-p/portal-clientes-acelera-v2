@@ -1,17 +1,12 @@
 import "server-only";
 
-import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
+import { createSqlClient } from "@/lib/postgres.mjs";
 
-let sqlClient: NeonQueryFunction<false, false> | null = null;
+let sqlClient: ReturnType<typeof createSqlClient> | null = null;
 
-export function getSql(): NeonQueryFunction<false, false> {
+export function getSql() {
   if (sqlClient) return sqlClient;
 
-  const databaseUrl = process.env.DATABASE_URL ?? process.env.POSTGRES_URL;
-  if (!databaseUrl) {
-    throw new Error("DATABASE_URL no está configurada.");
-  }
-
-  sqlClient = neon(databaseUrl);
+  sqlClient = createSqlClient();
   return sqlClient;
 }

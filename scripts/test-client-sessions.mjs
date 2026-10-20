@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { neon } from '@neondatabase/serverless';
+import { createSqlClient } from '../lib/postgres.mjs';
 
 const source = await readFile(new URL('../lib/call-sessions.ts', import.meta.url), 'utf8');
 const { CLIENT_SESSIONS_QUERY } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
-const sql = neon(process.env.DATABASE_URL ?? process.env.POSTGRES_URL);
+const sql = createSqlClient();
 const id = n => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
 const base = { client_id: id(100), started_at: '2026-10-02T19:00:00Z', title: 'Onboarding', source: 'fathom', summary: 'Resumen', share_url: 'https://example.com/recording', recording_url: null, created_at: '2026-10-03T00:00:00Z' };
 const cases = [
@@ -34,3 +34,4 @@ for (const [name, first, second, count, preferred] of cases) {
   if (preferred) assert.equal(result[0].id, preferred, name);
   console.log(`PASS: ${name}`);
 }
+await sql.end();
