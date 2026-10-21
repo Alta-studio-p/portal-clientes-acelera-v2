@@ -26,7 +26,19 @@ const api = {
 const mocks = {
   'next/headers': { headers: async () => new Map([['origin', 'http://localhost:3005']]) },
   'next/cache': { revalidatePath() {} },
-  '@/lib/auth': { requireRole: async roles => { if (!roles.includes(fixture.role)) throw Error('denied'); } },
+  '@/lib/auth': { requireRole: async roles => { if (!roles.includes(fixture.role)) throw Error('denied'); return { userId: id }; } },
+  '@/lib/activation-url': { getActivationUrl: async manual => {
+    const configured = process.env.APP_URL || (manual ? 'https://portal-clientes-acelera-v2.vercel.app' : 'http://localhost:3005');
+    if (manual && !configured.startsWith('https://')) throw Error('missing_origin');
+    return `${configured}/auth/activate`;
+  } },
+  '@/lib/client-invitation.mjs': { issueClientInvitation: async (_sql, options) => {
+    if (fixture.issueFailure) throw Error('fixture');
+    sideEffects++;
+    const url = new URL('/auth/invitation', options.origin);
+    url.hash = 'token=fixture-token-only';
+    return { link: url.toString(), expiresAt: '2026-10-22T00:00:00Z' };
+  } },
   '@/lib/db': { getSql: () => async strings => {
     const query = strings.join('?');
     if (query.includes('select id::text, profile_id::text')) return [fixture.client];
@@ -65,21 +77,21 @@ const run = f => mod.exports.inviteClient(previous, f || form());
   reset(); fixture.client.profile_id = uid; assert((await run()).error); assert.equal(sideEffects, 0); checks++;
   reset(); let result = await run();
   assert.equal(result.error, null); assert.equal(generated.type, 'invite');
-  assert.equal(sideEffects, 2); // generateLink and SQL binding, no email call.
+  assert.equal(sideEffects, 3); // Auth creation, SQL binding, managed invitation; no email.
   const url = new URL(result.link);
   assert.equal(url.origin, 'https://portal-clientes-acelera-v2.vercel.app');
-  assert.equal(url.pathname, '/auth/activate'); assert.equal(url.search, '');
-  assert.equal(new URLSearchParams(url.hash.slice(1)).get('token_hash'), 'fixture-token-only'); checks++;
+  assert.equal(url.pathname, '/auth/invitation'); assert.equal(url.search, '');
+  assert.equal(new URLSearchParams(url.hash.slice(1)).get('token'), 'fixture-token-only'); checks++;
   reset(); fixture.user = { id: uid, email, email_confirmed_at: '2026-01-01' }; fixture.profile = { role: 'client', email };
-  result = await run(); assert.equal(result.error, null); assert.equal(generated.type, 'recovery'); assert.equal(sideEffects, 2); checks++;
-  reset(); fixture.user = { id: uid, email }; result = await run(); assert.equal(result.error, null); assert.equal(generated.type, 'invite'); checks++;
+  result = await run(); assert.equal(result.error, null); assert.equal(generated, null); assert.equal(sideEffects, 2); checks++;
+  reset(); fixture.user = { id: uid, email }; result = await run(); assert.equal(result.error, null); assert.equal(generated, null); checks++;
   for (const profile of [{ role: 'admin', email }, { role: 'coach', email }, { role: 'client', email: 'other@example.invalid' }]) {
     reset(); fixture.user = { id: uid, email }; fixture.profile = profile;
     assert((await run()).error); assert.equal(sideEffects, 0); checks++;
   }
   reset(); fixture.user = { id: uid, email, email_confirmed_at: '2026-01-01' }; assert((await run()).error); assert.equal(sideEffects, 0); checks++;
   reset(); fixture.user = { id: uid, email }; fixture.otherLink = true; assert((await run()).error); assert.equal(sideEffects, 0); checks++;
-  reset(); fixture.user = { id: uid, email }; fixture.wrongUser = true; result = await run(); assert(result.error); assert.equal(result.link, null); checks++;
+  reset(); fixture.user = { id: uid, email }; fixture.issueFailure = true; result = await run(); assert(result.error); assert.equal(result.link, null); checks++;
   reset(); fixture.generateError = true; result = await run(); assert(result.error); assert.equal(result.link, null); checks++;
   reset(); fixture.bindFailure = true; result = await run(); assert(result.error); assert.equal(result.link, null); checks++;
   reset(); process.env.APP_URL = 'http://localhost:3002'; result = await run(); assert(result.error); assert.equal(sideEffects, 0); checks++;

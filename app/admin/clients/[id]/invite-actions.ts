@@ -1,29 +1,16 @@
 'use server';
 
-import { headers } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { requireRole } from '@/lib/auth';
 import { getSql } from '@/lib/db';
 import { createAdminClient } from '@/lib/supabase/server';
+import { getActivationUrl } from '@/lib/activation-url';
+import { issueClientInvitation } from '@/lib/client-invitation.mjs';
 
 export interface InviteState { error: string | null; message: string | null; link: string | null }
 
-async function activationUrl(manualLink: boolean) {
-  const origin = (await headers()).get('origin');
-  if (!manualLink && process.env.NODE_ENV === 'development' && origin && /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin)) {
-    return `${origin}/auth/activate`;
-  }
-  const configured = process.env.APP_URL ?? process.env.NEXT_PUBLIC_SITE_URL ??
-    (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : null) ??
-    (manualLink ? 'https://portal-clientes-acelera-v2.vercel.app' : null);
-  if (!configured) throw new Error('missing_origin');
-  const url = new URL(configured);
-  if (url.protocol !== 'https:' || url.username || url.password || /^(localhost|127\.|\[::1\])/.test(url.hostname)) throw new Error('missing_origin');
-  return `${url.origin}/auth/activate`;
-}
-
 export async function inviteClient(_previous: InviteState, form: FormData): Promise<InviteState> {
-  await requireRole(['admin']);
+  const { userId } = await requireRole(['admin']);
   const clientId = String(form.get('clientId') ?? '');
   const fail = (error: string): InviteState => ({ error, message: null, link: null });
   const delivery = String(form.get('delivery') ?? 'email');
@@ -44,7 +31,7 @@ export async function inviteClient(_previous: InviteState, form: FormData): Prom
       union all select id from public.clients where lower(trim(email)) = ${email} and id <> ${clientId}::uuid
     `;
     if (conflicts.length) return fail('Ese correo pertenece a otra ficha o a una cuenta del equipo. No se cambió su acceso.');
-    const redirectTo = await activationUrl(manualLink);
+    const redirectTo = await getActivationUrl(manualLink);
     const admin = await createAdminClient();
     let user: Awaited<ReturnType<typeof admin.auth.admin.listUsers>>['data']['users'][number] | undefined;
     for (let page = 1; ; page++) {
@@ -65,19 +52,11 @@ export async function inviteClient(_previous: InviteState, form: FormData): Prom
       `;
       if (linked.length) return fail('Esta cuenta ya está vinculada a otra persona.');
     }
-    let generatedLink: string | null = null;
-    if (manualLink) {
-      const type = user?.email_confirmed_at ? 'recovery' : 'invite';
-      const { data, error } = type === 'recovery'
-        ? await admin.auth.admin.generateLink({ type, email, options: { redirectTo } })
-        : await admin.auth.admin.generateLink({ type, email, options: { redirectTo, data: { full_name: client.full_name } } });
+    if (manualLink && !user) {
+      const { data, error } = await admin.auth.admin.generateLink({ type: 'invite', email, options: { redirectTo, data: { full_name: client.full_name } } });
       if (error || !data.user || !data.properties?.hashed_token) return fail('Supabase no pudo generar el enlace. Revisa la configuración de acceso o vuelve a intentarlo.');
-      if ((user && data.user.id !== user.id) || data.user.email?.toLowerCase() !== email) return fail('La cuenta no coincide con el cliente. No se entregó ningún enlace.');
+      if (data.user.email?.toLowerCase() !== email) return fail('La cuenta no coincide con el cliente. No se entregó ningún enlace.');
       user = data.user;
-      // Keep the token out of URL queries, server logs and WhatsApp link previews.
-      const url = new URL(redirectTo);
-      url.hash = new URLSearchParams({ token_hash: data.properties.hashed_token, type }).toString();
-      generatedLink = url.toString();
     } else if (!user) {
       const { data, error } = await admin.auth.admin.inviteUserByEmail(email, { redirectTo, data: { full_name: client.full_name } });
       if (error || !data.user) return fail('Supabase no pudo enviar la invitación. Revisa SMTP, límites de envío y las URLs permitidas.');
@@ -104,7 +83,10 @@ export async function inviteClient(_previous: InviteState, form: FormData): Prom
     `;
     if (!linked.length) return fail('No se pudo vincular la cuenta. Recarga y revisa si la ficha tiene otro acceso.');
     revalidatePath(`/admin/clients/${clientId}`);
-    if (manualLink) return { error: null, message: 'Enlace generado. No se envió ningún correo. Compártelo únicamente con este cliente; es temporal y de un solo uso.', link: generatedLink };
+    if (manualLink) {
+      const invitation = await issueClientInvitation(sql, { clientId, profileId: user.id, email, origin: redirectTo, createdBy: userId });
+      return { error: null, message: 'Enlace generado. Vence en 48 horas y es de un solo uso. No se envió ningún correo. Compártelo únicamente con este cliente.', link: invitation.link };
+    }
     if (!invitationSent) {
       // Existing accounts get a password-creation/reset link, not a duplicate account.
       const { error } = await admin.auth.resetPasswordForEmail(email, { redirectTo });

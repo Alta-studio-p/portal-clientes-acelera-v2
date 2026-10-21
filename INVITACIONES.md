@@ -38,10 +38,14 @@ sin duplicar la cuenta ni cambiar su contraseña hasta que el cliente lo use.
 
 Los enlaces manuales siempre apuntan a HTTPS público, incluso desde localhost.
 Si no hay URL configurada, usan `https://portal-clientes-acelera-v2.vercel.app`.
-El token va en el fragmento, no en la consulta, para evitar registros en el servidor
-y consumo por las vistas previas de WhatsApp. La activación lo elimina de la barra
-y lo verifica con Supabase. El vencimiento depende de la configuración de Auth.
-El enlace solo se devuelve después de guardar la vinculación; no se guarda en tablas.
+El enlace manual dura 48 horas exactas desde su emisión. Usa un secreto aleatorio
+de 256 bits, del que solo se guarda SHA-256 en `client_access_invitations` con RLS
+y sin acceso de anon/authenticated. No se modifica el vencimiento global de Auth.
+El secreto viaja en el fragmento y se borra de la barra al abrir la página.
+La persona debe pulsar Continuar para canjearlo; las vistas previas no lo consumen.
+El servidor valida vigencia, uso único, ficha, correo y rol antes de emitir/verificar
+un token corto de Supabase y permitir crear la contraseña. Regenerarlo invalida el
+enlace manual anterior. Ejecutar `supabase-client-invitations.sql` antes de desplegar.
 No publiques estos enlaces ni los envíes a grupos; entrégalos solo a su titular.
 
 No se deben compartir contraseñas ni claves privadas.

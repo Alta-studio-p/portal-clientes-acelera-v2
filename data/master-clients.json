@@ -62,7 +62,11 @@
   { "name": "Johann Rodriguez", "aliases": ["Johan Rodríguez"], "emails": ["dijohann.zarta@gmail.com"] },
   { "name": "Maria Daniela Jimenez", "emails": ["mjimenezcolmenares@gmail.com"] },
   { "name": "Nicolas Ramirez", "emails": ["nicoraga95@gmail.com"] },
-  { "name": "Jorge forero" },
+  { "name": "Jorge forero", "emails": ["jifj79@hotmail.com"] },
   { "name": "Fernando Godoy", "emails": ["fgodoy.fernando@gmail.com"] },
-  { "name": "German Salgado" }
+  { "name": "German Salgado", "emails": ["germanandres58@gmail.com"] },
+  { "name": "Carlos Díaz", "emails": ["carlosdiaz83@gmail.com"] },
+  { "name": "Lina Rodríguez", "emails": ["rodriguezcha.lina@gmail.com"] },
+  { "name": "Álvaro Isaza", "aliases": ["Alvaro Mario Isaza del Castillo"], "emails": ["alvaro_isaza@hotmail.com"] },
+  { "name": "Juan Pablo Garcés", "emails": ["jpgarcesr@hotmail.com"] }
 ]
