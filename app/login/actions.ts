@@ -40,6 +40,11 @@ export async function loginAction(
     return { error: "Usuario o contraseña incorrectos." };
   }
 
+  if (!data.user.email_confirmed_at) {
+    await supabase.auth.signOut();
+    return { error: "Verifica tu correo antes de ingresar." };
+  }
+
   const sql = getSql();
   const profiles = await sql`
     select id::text, email, full_name, role
@@ -56,6 +61,6 @@ export async function loginAction(
     };
   }
 
-  const target = redirectTo && redirectTo.startsWith("/") ? redirectTo : roleHome(profile.role);
+  const target = redirectTo.startsWith("/") && !redirectTo.startsWith("//") ? redirectTo : roleHome(profile.role);
   redirect(target);
 }

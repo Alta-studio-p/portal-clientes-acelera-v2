@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { getSessionProfile, roleHome } from "@/lib/auth";
 import { LoginForm } from "./login-form";
 
@@ -11,7 +12,7 @@ export default async function LoginPage({
   const params = await searchParams;
 
   if (session?.profile) {
-    redirect(params.redirectTo && params.redirectTo.startsWith("/") ? params.redirectTo : roleHome(session.profile.role));
+    redirect(params.redirectTo?.startsWith("/") && !params.redirectTo.startsWith("//") ? params.redirectTo : roleHome(session.profile.role));
   }
 
   return (
@@ -26,6 +27,7 @@ export default async function LoginPage({
 
         <div className="rounded-xl border border-border bg-surface p-6 shadow-sm">
           <LoginForm redirectTo={params.redirectTo} />
+          <p className="mt-5 text-center text-sm text-muted">¿Primera vez aquí? <Link href="/register" className="text-accent hover:underline">Crear cuenta de cliente</Link></p>
           {params.error === "no_profile" && (
             <p className="mt-4 rounded-md bg-[--danger-bg] px-3 py-2 text-xs text-[--danger]">
               Tu cuenta no tiene un perfil asociado. Contacta a Acelera.

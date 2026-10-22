@@ -13,7 +13,7 @@ export async function getSessionProfile(): Promise<{
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) return null;
+  if (!user || !user.email_confirmed_at) return null;
 
   const sql = getSql();
   const profiles = await sql`
