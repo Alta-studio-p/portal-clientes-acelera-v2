@@ -13,6 +13,40 @@ function refresh(clientId?: string) {
   if (clientId) for (const path of [`/admin/clients/${clientId}`,`/coach/clients/${clientId}`,`/preview/clients/${clientId}`]) revalidatePath(path);
 }
 
+export async function editProgressLabel(clientId: string, operation: 'add' | 'remove' | 'create', value: string): Promise<ProgressState> {
+  const session = await requireRole(['admin','coach']);
+  if (!uuid.test(clientId) || !['add','remove','create'].includes(operation) || typeof value !== 'string') return {error:'Solicitud inválida.',success:false};
+  const label = value.trim().replace(/\s+/g,' ');
+  if (operation === 'create' ? !label || label.length > 60 : !uuid.test(value)) return {error:'Estado inválido. Usa un nombre de hasta 60 caracteres.',success:false};
+  const sql = getSql();
+  try {
+    await sql.transaction(async tx => {
+      const allowed = await tx`select c.id from public.clients c where c.id=${clientId}::uuid and
+        (${session.profile.role === 'admin'} or exists (select 1 from public.coach_client_assignments a
+          join public.coaches co on co.id=a.coach_id where a.client_id=c.id and co.profile_id=${session.userId}::uuid)) for update`;
+      if (!allowed.length) throw new Error('denied');
+      let categoryId = value;
+      if (operation === 'create') {
+        await tx`insert into public.client_progress_categories (label) values (${label}) on conflict do nothing`;
+        const [category] = await tx`select id::text from public.client_progress_categories where lower(trim(label))=lower(${label}) and active=true for share`;
+        if (!category) throw new Error('inactive');
+        categoryId = String(category.id);
+      }
+      if (operation === 'remove') {
+        await tx`delete from public.client_progress_labels where client_id=${clientId}::uuid and category_id=${categoryId}::uuid`;
+        await tx`update public.client_progress_states set category_id=null,updated_by=${session.userId}::uuid,updated_at=now() where client_id=${clientId}::uuid and category_id=${categoryId}::uuid`;
+      } else {
+        const active = await tx`select id from public.client_progress_categories where id=${categoryId}::uuid and active=true for share`;
+        if (!active.length) throw new Error('inactive');
+        await tx`insert into public.client_progress_labels (client_id,category_id,updated_by) values
+          (${clientId}::uuid,${categoryId}::uuid,${session.userId}::uuid) on conflict (client_id,category_id) do nothing`;
+      }
+    });
+  } catch {return {error:'No se pudo guardar. Revisa tus permisos o si el estado fue retirado.',success:false};}
+  refresh(clientId);
+  return {error:null,success:true};
+}
+
 export async function saveProgressClient(_previous: ProgressState, form: FormData): Promise<ProgressState> {
   const session = await requireRole(['admin','coach']);
   const id = String(form.get('clientId') ?? '');

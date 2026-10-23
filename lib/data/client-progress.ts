@@ -12,14 +12,16 @@ export async function getStaffProgress(previewCoachId?: string) {
   const sql = getSql();
   const clients = await sql`
     select c.id::text, coalesce(c.full_name,c.email,'Sin nombre') as name, c.email,
-      c.start_date::text as "startDate", state.category_id::text as "categoryId",
+      c.start_date::text as "startDate", c.status as "operationalStatus",
+      coalesce((select array_agg(label.category_id::text order by label.category_id)
+        from public.client_progress_labels label where label.client_id=c.id),'{}') as "categoryIds",
       (select count(*)::int from public.client_sessions calls where calls.client_id=c.id) as calls,
       (select max(started_at)::text from public.client_sessions calls where calls.client_id=c.id) as "lastCall",
       coalesce((select array_agg(coalesce(co.full_name,co.email) order by co.full_name)
         from public.coach_client_assignments a join public.coaches co on co.id=a.coach_id where a.client_id=c.id),'{}') as coaches,
       coalesce((select array_agg(a.coach_id::text order by co.full_name)
         from public.coach_client_assignments a join public.coaches co on co.id=a.coach_id where a.client_id=c.id),'{}') as "coachIds"
-    from public.clients c left join public.client_progress_states state on state.client_id=c.id
+    from public.clients c
     where (${coachId ?? null}::uuid is null or exists (select 1 from public.coach_client_assignments a where a.client_id=c.id and a.coach_id=${coachId ?? null}::uuid))
     order by c.full_name nulls last,c.email
   `;

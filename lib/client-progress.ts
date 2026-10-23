@@ -9,7 +9,7 @@ export function validProgressDate(value: string) {
 }
 export interface ProgressClient {
   id: string; name: string; email: string; startDate: string | null; lastCall: string | null;
-  calls: number; coaches: string[]; coachIds: string[]; categoryId: string | null;
+  calls: number; coaches: string[]; coachIds: string[]; categoryIds: string[]; operationalStatus: string;
 }
 export interface ProgressCategory { id: string; label: string; active: boolean }
 
