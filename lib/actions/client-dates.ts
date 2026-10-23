@@ -62,5 +62,7 @@ export async function updateClientDates(
   revalidatePath(`/coach/clients/${clientId}`);
   revalidatePath("/admin/clients");
   revalidatePath("/coach");
+  revalidatePath("/admin/progress");
+  revalidatePath("/coach/progress");
   return { error: null, success: true };
 }

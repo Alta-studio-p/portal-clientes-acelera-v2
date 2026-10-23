@@ -6,6 +6,7 @@ import { AppShell } from "@/components/app-shell";
 
 const NAV_ITEMS = [
   { href: "/coach", label: "Mis clientes" },
+  { href: "/coach/progress", label: "Progreso" },
   { href: "/coach/fees", label: "Mis llamadas" },
   { href: "/coach/unassigned", label: "Sin cliente" },
 ];

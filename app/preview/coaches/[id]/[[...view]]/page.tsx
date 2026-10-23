@@ -9,6 +9,8 @@ import { CoachFeesDashboard } from '@/components/coach-fees-dashboard';
 import { ClientDetailView } from '@/components/client-detail-view';
 import { CallAssignmentQueue } from '@/components/call-assignment-queue';
 import { PageHeader } from '@/components/ui';
+import { ClientProgressDashboard } from '@/components/client-progress-dashboard';
+import { getStaffProgress } from '@/lib/data/client-progress';
 
 export default async function CoachPreviewPage({ params, searchParams }: {
   params: Promise<{ id: string; view?: string[] }>;
@@ -19,6 +21,7 @@ export default async function CoachPreviewPage({ params, searchParams }: {
   const coach = await requirePreviewCoach(id);
   const query = await searchParams;
   const base = `/preview/coaches/${coach.id}`;
+  if (view.length === 1 && view[0] === 'progress') return <ClientProgressDashboard {...await getStaffProgress(coach.id)} readOnly basePath={base} />;
   if (!view.length) return <CoachClientsView allClients={await getClientsForCoach(coach.id)} q={query.q} basePath={base} />;
   if (view.length === 1 && view[0] === 'fees') {
     const month = validMonth(query.month);
