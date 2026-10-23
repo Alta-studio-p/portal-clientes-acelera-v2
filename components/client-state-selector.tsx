@@ -6,7 +6,7 @@ import { editProgressLabel, manageProgressCategory } from '@/lib/actions/client-
 import type { ProgressCategory, ProgressClient } from '@/lib/client-progress';
 import { StatusBadge } from '@/components/status-badge';
 
-const tag = 'inline-flex max-w-full items-center rounded px-2 py-1 text-xs font-medium leading-4';
+const tag = 'inline-flex min-w-0 max-w-full items-center rounded px-2 py-1 text-xs font-medium leading-4';
 const icon = 'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded text-muted hover:bg-surface-muted focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50';
 
 function CategoryOptions({ category }: { category: ProgressCategory }) {
@@ -42,7 +42,7 @@ export function ClientStateSelector({ client, categories, isAdmin, readOnly = fa
   const canCreate = normalized.length > 0 && normalized.length <= 60 && !categories.some(c=>c.label.toLocaleLowerCase('es')===normalized.toLocaleLowerCase('es'));
   const chips = <>
     <StatusBadge status={client.operationalStatus} />
-    {categories.filter(c=>selected.includes(c.id)).map(c=><span key={c.id} className={`${tag} bg-accent-soft text-accent`}><span className="break-words">{c.label}{!c.active?' (retirado)':''}</span></span>)}
+    {categories.filter(c=>selected.includes(c.id)).map(c=><span key={c.id} className={`${tag} bg-accent-soft text-accent`}><span className="min-w-0 break-words">{c.label}{!c.active?' (retirado)':''}</span></span>)}
   </>;
   function assign(id: string, checked: boolean) {
     setError(null);
@@ -78,12 +78,12 @@ export function ClientStateSelector({ client, categories, isAdmin, readOnly = fa
         {options.map(c=><div key={c.id} className="grid grid-cols-[1fr_auto] items-center rounded-md hover:bg-surface-muted">
           <label className="flex min-h-10 min-w-0 cursor-pointer items-center gap-2 px-2 py-1">
             <input type="checkbox" checked={selected.includes(c.id)} disabled={pending || (!c.active&&!selected.includes(c.id))} onChange={e=>assign(c.id,e.target.checked)} className="h-4 w-4 shrink-0 accent-[var(--accent)]" />
-            <span className={`${tag} bg-accent-soft text-accent`}><span className="break-words">{c.label}{!c.active?' (retirado)':''}</span></span>
+            <span className={`${tag} bg-accent-soft text-accent`}><span className="min-w-0 break-words">{c.label}{!c.active?' (retirado)':''}</span></span>
           </label>
           {isAdmin && <CategoryOptions category={c} />}
         </div>)}
       </div>
-      {canCreate && <button type="button" onClick={create} disabled={pending} className="mt-2 flex min-h-10 w-full items-center gap-2 rounded-md px-2 text-left text-sm text-accent hover:bg-accent-soft disabled:opacity-50"><Plus size={16} className="shrink-0"/><span className="break-words">Crear “{normalized}”</span></button>}
+      {canCreate && <button type="button" onClick={create} disabled={pending} className="mt-2 flex min-h-10 w-full items-center gap-2 rounded-md px-2 text-left text-sm text-accent hover:bg-accent-soft disabled:opacity-50"><Plus size={16} className="shrink-0"/><span className="min-w-0 break-words">Crear “{normalized}”</span></button>}
       {!options.length && !canCreate && <p className="px-2 py-3 text-sm text-muted">No hay estados disponibles.</p>}
       {pending && <p role="status" className="mt-2 px-2 text-xs text-muted">Guardando…</p>}
       {error && <p role="alert" className="mt-2 px-2 text-xs text-red-700">{error}</p>}
