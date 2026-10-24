@@ -39,6 +39,16 @@ const manage = (operation,label='',categoryId='') => category({error:null,succes
   assert.equal(progress.validProgressDate('2024-02-29'),true);
   assert.match(progress.formatProgressDate('2026-08-04'),/^4 /);
   assert.match(progress.formatProgressDate('2026-08-04T02:00:00Z'),/^3 /);
+  assert.equal(progress.progressEndDate('2026-08-04'),'2026-11-04');
+  assert.equal(progress.progressEndDate('2026-11-30'),'2027-02-28');
+  assert.equal(progress.progressEndDate('2023-11-30'),'2024-02-29');
+  assert.equal(progress.progressEndDate('2026-01-31'),'2026-04-30');
+  assert.equal(progress.progressEndDate('2026-12-31'),'2027-03-31');
+  assert.equal(progress.progressEndDate(null),null);
+  assert.equal(progress.progressEndDate('2026-02-30'),null);
+  const palette=Array.from({length:7},(_,i)=>({id:id(i),label:`State ${i}`,active:true}));
+  assert.equal(new Set(palette.map(c=>progress.progressCategoryColor(c.id,palette))).size,7);
+  assert.equal(progress.progressCategoryColor(id(2),palette),progress.progressCategoryColor(id(2),[...palette].reverse()));
   const {createSqlClient}=await import('../lib/postgres.mjs');
   const sql=createSqlClient(); const rollback=Error('fixture rollback');
   try {await sql.transaction(async tx=>{

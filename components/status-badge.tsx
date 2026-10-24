@@ -7,9 +7,9 @@ const LABELS: Record<ClientStatus, string> = {
 };
 
 const STYLES: Record<ClientStatus, string> = {
-  active: "bg-[--status-active-bg] text-[--status-active]",
-  inactive: "bg-[--status-inactive-bg] text-[--status-inactive]",
-  extension: "bg-[--status-extension-bg] text-[--status-extension]",
+  active: "bg-[var(--status-active-bg)] text-[var(--status-active)]",
+  inactive: "bg-[var(--status-inactive-bg)] text-[var(--status-inactive)]",
+  extension: "bg-[var(--status-extension-bg)] text-[var(--status-extension)]",
 };
 
 export function StatusBadge({ status }: { status: ClientStatus | string | null }) {

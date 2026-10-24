@@ -5,7 +5,7 @@ import { useActionState, useMemo, useState } from 'react';
 import { Pencil, Save, TriangleAlert, Search, X } from 'lucide-react';
 import { saveProgressClient, type ProgressState } from '@/lib/actions/client-progress';
 import { ClientStateSelector } from '@/components/client-state-selector';
-import { sessionProgress, SESSION_LIMIT, formatProgressDate as formatDate, type ProgressClient, type ProgressCategory } from '@/lib/client-progress';
+import { sessionProgress, SESSION_LIMIT, progressEndDate, formatProgressDate as formatDate, type ProgressClient, type ProgressCategory } from '@/lib/client-progress';
 
 const initial: ProgressState = { error: null, success: false };
 const control = 'min-h-10 rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-accent focus:ring-2 focus:ring-accent/20';
@@ -80,16 +80,17 @@ export function ClientProgressDashboard({ clients, categories, isAdmin, basePath
     <div className="flex items-center justify-between"><p role="status" className="text-sm text-muted">{visible.length} de {clients.length} clientes</p><span className="text-xs text-muted">Meta: {SESSION_LIMIT} sesiones</span></div>
     <div className="overflow-x-auto rounded-lg border border-border bg-surface">
       <table className="w-full min-w-[1050px] text-left text-sm">
-        <thead className="border-b border-border bg-surface-muted text-xs text-muted"><tr>{['Cliente',...(isAdmin ? ['Coach'] : []),'Progreso','Sesiones','Inicio','Última llamada','Estado'].map(h=><th key={h} className="px-4 py-3 font-medium">{h}</th>)}</tr></thead>
+        <thead className="border-b border-border bg-surface-muted text-xs text-muted"><tr>{['Cliente',...(isAdmin ? ['Coach'] : []),'Progreso','Sesiones','Inicio','Fin','Última llamada','Estado'].map(h=><th key={h} className="px-4 py-3 font-medium">{h}</th>)}</tr></thead>
         <tbody className="divide-y divide-border">{visible.map(client=>{
           const p = sessionProgress(client.calls);
           return <tr key={client.id} className="align-top hover:bg-surface-muted/40">
-            <td className="px-4 py-3"><Link href={`${basePath}/clients/${client.id}`} className={`flex min-h-10 max-w-60 items-center gap-2 font-medium hover:underline ${p.excess ? 'text-red-700' : 'text-foreground'}`}>
+            <td className="px-4 py-3"><Link prefetch={false} href={`${basePath}/clients/${client.id}`} className={`flex min-h-10 max-w-60 items-center gap-2 font-medium hover:underline ${p.excess ? 'text-red-700' : 'text-foreground'}`}>
               {p.excess > 0 && <TriangleAlert size={16} className="shrink-0" aria-label="Excede 12 sesiones" />}<span className="break-words">{client.name}</span></Link>{p.excess > 0 && <p className="text-xs text-red-700">{p.excess} {p.excess===1?'sesión':'sesiones'} sobre el límite</p>}</td>
             {isAdmin && <td className="max-w-44 px-4 py-5 text-muted">{client.coaches.join(', ') || 'Sin coach'}</td>}
             <td className="px-4 py-5"><div className="flex w-40 items-center gap-3"><div role="progressbar" aria-label={`Progreso de ${client.name}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={p.percent} aria-valuetext={`${p.sessions} de ${SESSION_LIMIT} sesiones`} className="h-2 flex-1 overflow-hidden rounded-full bg-surface-muted"><div className={`h-full ${p.excess?'bg-red-600':'bg-accent'}`} style={{width:`${p.percent}%`}} /></div><span className={`w-10 text-right font-semibold tabular-nums ${p.excess?'text-red-700':''}`}>{p.percent}%</span></div></td>
             <td className={`px-4 py-5 tabular-nums ${p.excess?'font-semibold text-red-700':'text-muted'}`}>{p.sessions} / {SESSION_LIMIT}</td>
             <td className="px-4 py-3 text-muted">{readOnly ? formatDate(client.startDate) : <RowEditor key={`${client.id}-start-${client.startDate}`} client={client} />}</td>
+            <td className="whitespace-nowrap px-4 py-5 text-muted">{formatDate(progressEndDate(client.startDate))}</td>
             <td className="whitespace-nowrap px-4 py-5 text-muted">{formatDate(client.lastCall)}</td>
             <td className="px-4 py-3"><ClientStateSelector client={client} categories={categories} isAdmin={isAdmin} readOnly={readOnly} /></td>
           </tr>;
