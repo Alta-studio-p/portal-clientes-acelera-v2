@@ -5,6 +5,7 @@ import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getSql } from '@/lib/db';
 import { createAdminClient, createClient } from '@/lib/supabase/server';
+import { completePendingInvitation } from '@/lib/data/complete-pending-invitation';
 
 export interface RegistrationState { error: string | null; message: string | null }
 const unavailable = 'No pudimos crear la cuenta con ese correo. Si ya tienes cuenta, inicia sesión o usa “Olvidé mi contraseña”. Si eres cliente nuevo, contacta a Acelera para revisar tu correo registrado.';
@@ -16,6 +17,7 @@ export async function requestClientRegistration(_previous: RegistrationState, fo
     return { error: 'Escribe un correo válido.', message: null };
   }
   if (password.length < 10 || password.length > 128) return { error: 'Usa una contraseña de entre 10 y 128 caracteres.', message: null };
+  if (Buffer.byteLength(password, 'utf8') > 72) return { error: 'La contraseña es demasiado larga. Usa una más corta.', message: null };
   if (password !== String(form.get('confirmPassword') ?? '')) return { error: 'Las contraseñas no coinciden.', message: null };
   try {
     const sql = getSql();
@@ -45,7 +47,7 @@ export async function requestClientRegistration(_previous: RegistrationState, fo
       select id from public.profiles where lower(trim(email)) = ${email} and role <> 'client'
       union all select id from public.coaches where lower(trim(email)) = ${email}
     `;
-    if (conflicts.length || client.profile_id) return { error: unavailable, message: null };
+    if (conflicts.length) return { error: unavailable, message: null };
     const admin = await createAdminClient();
     let user: Awaited<ReturnType<typeof admin.auth.admin.listUsers>>['data']['users'][number] | undefined;
     for (let page = 1; ; page++) {
@@ -54,9 +56,12 @@ export async function requestClientRegistration(_previous: RegistrationState, fo
       user = data.users.find(item => item.email?.trim().toLowerCase() === email);
       if (user || data.users.length < 1000) break;
     }
-    // Existing identities, including pending invites, must recover their password.
-    // Never overwrite an existing password based only on knowledge of an email.
-    if (user) return { error: unavailable, message: null };
+    if (user) {
+      if (user.email_confirmed_at || user.last_sign_in_at || client.profile_id !== user.id) return { error: unavailable, message: null };
+      const completed = await completePendingInvitation(user.id, String(client.id), email, password);
+      if (!completed) return { error: unavailable, message: null };
+    } else {
+    if (client.profile_id) return { error: unavailable, message: null };
     const { data, error: createError } = await admin.auth.admin.createUser({ email, password, email_confirm: true });
     if (createError || !data.user || data.user.email?.toLowerCase() !== email) return { error: unavailable, message: null };
     user = data.user;
@@ -80,12 +85,13 @@ export async function requestClientRegistration(_previous: RegistrationState, fo
       from profile, eligible where clients.id = eligible.id returning clients.id
     `;
     if (!linked.length) return { error: unavailable, message: null };
+    }
   } catch {
     console.error('Client registration could not complete.');
     return { error: 'No pudimos procesar la solicitud. Intenta más tarde o contacta a Acelera.', message: null };
   }
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) return { error: 'La cuenta fue creada. Inicia sesión con tu correo y contraseña.', message: null };
+  if (error) return { error: 'Tu acceso quedó listo. Inicia sesión con tu correo y contraseña.', message: null };
   redirect('/portal');
 }

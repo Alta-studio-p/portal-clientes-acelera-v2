@@ -16,12 +16,12 @@ delete process.env.VERCEL;
 async function run(options = {}) {
   const calls = [];
   const email = 'client@example.test';
-  const user = { id: 'user-id', email, ...(options.confirmed ? { email_confirmed_at: '2026-01-01' } : {}) };
+  const user = { id: 'user-id', email, ...(options.confirmed ? { email_confirmed_at: '2026-01-01' } : {}), ...(options.signedIn ? {last_sign_in_at:'2026-01-01'} : {}) };
   const sql = async (strings, ...values) => {
     const query = strings.join('?');
     calls.push(query);
     if (query.includes('client_registration_limits')) return [{ key: '', attempts: options.rateLimited ? 100 : 1 }];
-    if (query.startsWith('select id::text')) return options.unknown ? [] : Array.from({ length: options.duplicate ? 2 : 1 }, () => ({ id: 'client-id', email, full_name: 'Client', profile_id: options.mismatch ? 'other' : null }));
+    if (query.startsWith('select id::text')) return options.unknown ? [] : Array.from({ length: options.duplicate ? 2 : 1 }, () => ({ id: 'client-id', email, full_name: 'Client', profile_id: options.mismatch ? 'other' : options.pending ? user.id : null }));
     if (query.includes('with eligible')) return options.bindingFailed || options.linkedElsewhere ? [] : [{ id: 'client-id' }];
     if (query.includes('select role, email')) return options.staff ? [{ role: 'admin', email }] : options.noProfile ? [] : [{ role: 'client', email }];
     if (query.includes("role <> 'client'")) return options.conflict || options.staff ? [{ id: 'conflict' }] : [];
@@ -32,10 +32,11 @@ async function run(options = {}) {
     listUsers: async () => { calls.push('list'); return { data: { users: options.newUser ? [] : [user] }, error: null }; },
     createUser: async payload => { assert.equal(payload.email_confirm,true); assert.equal(payload.password,'test-password-123'); calls.push('create'); return { data: { user }, error: options.createFailed ? new Error('duplicate') : null }; },
   }, resetPasswordForEmail: async () => { calls.push('send'); return { error: null }; } } };
-  const action = new Function('createHmac', 'getSql', 'createAdminClient', 'createClient', 'redirect', 'headers', `${body}; return requestClientRegistration;`)(
+  const action = new Function('createHmac', 'getSql', 'createAdminClient', 'createClient', 'redirect', 'headers', 'completePendingInvitation', `${body}; return requestClientRegistration;`)(
     createHmac, () => sql, async () => admin,
     async () => ({auth:{signInWithPassword:async()=>{calls.push('signin');return {error:null};}}}),
     destination => { calls.push('redirect:'+destination); throw new Error('redirect'); }, async () => new Headers(),
+    async (userId,clientId,claimEmail,password)=>{calls.push('claim');assert.equal(userId,user.id);assert.equal(clientId,'client-id');assert.equal(claimEmail,email);assert.equal(password,'test-password-123');return !options.hasPassword && !options.claimFailed;},
   );
   const form = new FormData();
   form.set('email', options.invalid ? 'invalid' : ' Client@Example.Test ');
@@ -68,6 +69,18 @@ for (const blocked of [
 }
 assert.ok(!(await run({confirmed:true})).calls.includes('create'));
 assert.ok(!(await run()).calls.includes('create'));
+const pending=await run({pending:true});
+assert.equal(pending.result.error,null);
+assert.ok(pending.calls.includes('claim'));
+assert.ok(pending.calls.includes('redirect:/portal'));
+assert.ok(!pending.calls.includes('create'));
+assert.ok(!pending.calls.includes('send'));
+for(const blocked of [{confirmed:true},{signedIn:true},{hasPassword:true},{claimFailed:true},{mismatch:true}]){
+  const attempt=await run({pending:true,...blocked});
+  assert.ok(attempt.result.error);
+  assert.ok(!attempt.calls.includes('signin'));
+  assert.ok(!attempt.calls.includes('create'));
+}
 assert.ok((await run({ invalid: true })).result.error);
 assert.ok(!source.includes("form.get('role')"));
 assert.ok(!source.includes("form.get('clientId')"));
