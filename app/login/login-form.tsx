@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 import { loginAction, type LoginState } from "./actions";
 
@@ -14,7 +15,7 @@ export function LoginForm({ redirectTo }: { redirectTo?: string }) {
 
       <div>
         <label htmlFor="email" className="mb-1.5 block text-xs font-medium text-muted">
-          Usuario
+          Usuario o correo
         </label>
         <input
           id="email"
@@ -23,14 +24,19 @@ export function LoginForm({ redirectTo }: { redirectTo?: string }) {
           required
           autoComplete="username"
           className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-          placeholder="tu usuario"
+          placeholder="tu usuario o correo"
         />
       </div>
 
       <div>
-        <label htmlFor="password" className="mb-1.5 block text-xs font-medium text-muted">
-          Contraseña
-        </label>
+        <div className="mb-1.5 flex items-center justify-between">
+          <label htmlFor="password" className="block text-xs font-medium text-muted">
+            Contraseña
+          </label>
+          <Link href="/login/forgot-password" className="text-xs text-accent hover:underline">
+            ¿Olvidaste tu contraseña?
+          </Link>
+        </div>
         <input
           id="password"
           name="password"
