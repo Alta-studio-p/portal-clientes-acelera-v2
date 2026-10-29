@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getSessionProfile, roleHome } from "@/lib/auth";
+import { getSessionProfile } from "@/lib/auth";
+import { loginDestination } from '@/lib/login-destination';
 import { LoginForm } from "./login-form";
 
 export default async function LoginPage({
@@ -12,7 +13,7 @@ export default async function LoginPage({
   const params = await searchParams;
 
   if (session?.profile) {
-    redirect(params.redirectTo?.startsWith("/") && !params.redirectTo.startsWith("//") ? params.redirectTo : roleHome(session.profile.role));
+    redirect(loginDestination(params.redirectTo, session.profile.role));
   }
 
   return (

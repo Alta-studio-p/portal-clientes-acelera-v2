@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getSql } from "@/lib/db";
-import { roleHome } from "@/lib/auth";
+import { loginDestination } from "@/lib/login-destination";
 import type { Profile } from "@/lib/supabase/types";
 
 export type LoginState = { error: string | null };
@@ -16,7 +16,7 @@ const DEFAULT_LOGIN_DOMAIN = "joinaceleratalent.com";
 // escribe un correo completo (cuentas viejas como outlook.com) se respeta tal
 // cual, para no romper accesos existentes.
 function resolveLoginEmail(usernameOrEmail: string): string {
-  if (usernameOrEmail.includes("@")) return usernameOrEmail;
+  if (usernameOrEmail.includes("@")) return usernameOrEmail.toLowerCase();
   return `${usernameOrEmail.toLowerCase()}@${DEFAULT_LOGIN_DOMAIN}`;
 }
 
@@ -37,12 +37,15 @@ export async function loginAction(
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error || !data.user) {
-    return { error: "Usuario o contraseña incorrectos." };
+    if (error?.code === 'email_not_confirmed') return { error: 'Tu acceso anterior quedó pendiente. Usa “Olvidé mi contraseña” para activarlo.' };
+    if (error?.status === 429) return { error: 'Demasiados intentos. Espera unos minutos antes de volver a ingresar.' };
+    if (error && (error.status === 0 || (error.status ?? 0) >= 500)) return { error: 'El servicio de acceso no está disponible por el momento. Intenta de nuevo en unos minutos.' };
+    return { error: 'Correo o contraseña incorrectos. Usa tu correo completo o recupera tu contraseña.' };
   }
 
   if (!data.user.email_confirmed_at) {
-    await supabase.auth.signOut();
-    return { error: "Verifica tu correo antes de ingresar." };
+    await supabase.auth.signOut({ scope: 'local' });
+    return { error: 'Tu acceso anterior quedó pendiente. Usa “Olvidé mi contraseña” para activarlo.' };
   }
 
   const sql = getSql();
@@ -55,12 +58,13 @@ export async function loginAction(
   const profile = profiles[0] as unknown as Profile | undefined;
 
   if (!profile) {
+    await supabase.auth.signOut({ scope: 'local' });
     return {
       error:
         "Tu cuenta no tiene un perfil asociado todavía. Contacta a Acelera para vincular tu acceso.",
     };
   }
 
-  const target = redirectTo.startsWith("/") && !redirectTo.startsWith("//") ? redirectTo : roleHome(profile.role);
+  const target = loginDestination(redirectTo, profile.role);
   redirect(target);
 }

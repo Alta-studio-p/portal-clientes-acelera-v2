@@ -31,19 +31,18 @@ export async function updateSession(request: NextRequest) {
   const isActivationRoute = ["/auth/activate", "/auth/confirm", "/auth/invitation"].includes(request.nextUrl.pathname);
   const isPublicAsset = request.nextUrl.pathname.startsWith("/_next");
 
-  if (!user && !isAuthRoute && !isActivationRoute && !isPublicAsset) {
+  if ((!user || !user.email_confirmed_at) && !isAuthRoute && !isActivationRoute && !isPublicAsset) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("redirectTo", request.nextUrl.pathname);
-    return NextResponse.redirect(url);
+    const response = NextResponse.redirect(url);
+    // Refresh/cleanup cookies must survive redirects as well as normal requests.
+    supabaseResponse.cookies.getAll().forEach(cookie => response.cookies.set(cookie));
+    return response;
   }
 
-  if (user && isAuthRoute) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/";
-    url.search = "";
-    return NextResponse.redirect(url);
-  }
+  // LoginPage handles valid sessions after loading the profile. Redirecting here
+  // traps accounts without a profile in a login/home loop and blocks recovery.
 
   return supabaseResponse;
 }
