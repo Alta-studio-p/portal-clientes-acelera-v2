@@ -27,8 +27,12 @@ function CategoryOptions({ category }: { category: ProgressCategory }) {
   </>;
 }
 
-export function ClientStateSelector({ client, categories, isAdmin, readOnly = false }: {
-  client: ProgressClient; categories: ProgressCategory[]; isAdmin: boolean; readOnly?: boolean;
+/** Etiquetas automáticas por fecha de fin (no se agregan con el botón +): naranja "Finalizó hace X días", amarilla suave "Termina en X días". */
+export type PhaseTag = { text: string; tone: 'recent' | 'soon' };
+const phaseTone = { recent: 'bg-[#fbe6d3] text-[#9a4d12]', soon: 'bg-[#fdf3c4] text-[#765b00]' } as const;
+
+export function ClientStateSelector({ client, categories, isAdmin, readOnly = false, status, phaseTag = null }: {
+  client: ProgressClient; categories: ProgressCategory[]; isAdmin: boolean; readOnly?: boolean; status?: string; phaseTag?: PhaseTag | null;
 }) {
   const popoverId = useId();
   const [query, setQuery] = useState('');
@@ -42,7 +46,8 @@ export function ClientStateSelector({ client, categories, isAdmin, readOnly = fa
   const options = categories.filter(c=>(c.active || selected.includes(c.id) || (isAdmin && normalized.length > 0)) && c.label.toLocaleLowerCase('es').includes(normalized.toLocaleLowerCase('es')));
   const canCreate = normalized.length > 0 && normalized.length <= 60 && !categories.some(c=>c.label.toLocaleLowerCase('es')===normalized.toLocaleLowerCase('es'));
   const chips = <>
-    <StatusBadge status={client.operationalStatus} />
+    <StatusBadge status={status ?? client.operationalStatus} />
+    {phaseTag && <span className={`${tag} ${phaseTone[phaseTag.tone]}`}>{phaseTag.text}</span>}
     {categories.filter(c=>selected.includes(c.id)).map(c=><span key={c.id} className={`${tag} ${progressCategoryColor(c.id,categories)}`}><span className="min-w-0 break-words">{c.label}{!c.active?' (retirado)':''}</span></span>)}
   </>;
   function assign(id: string, checked: boolean) {

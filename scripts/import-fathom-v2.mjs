@@ -385,6 +385,18 @@ async function refreshClientContexts() {
   return updated;
 }
 
+// Cada día: el estado guardado sigue la fecha de fin (activo / recién finalizado ≤ 15 días / finalizado).
+// Nunca detiene la importación: si la función de la base no existe todavía, solo avisa.
+async function syncProgramStatuses() {
+  if (!APPLY) return null;
+  try {
+    return await sb("rpc/sync_client_program_status", { method: "POST", body: "{}" });
+  } catch (error) {
+    console.warn(`Estado por fecha de fin no sincronizado: ${String(error.message).slice(0, 120)}`);
+    return null;
+  }
+}
+
 async function refreshProgramDates(masterClients) {
   if (!APPLY) return 0;
   const clientIds = [...masterClients.values()].map((client) => client.id);
@@ -571,6 +583,7 @@ async function main() {
 
   const contextsUpdated = await refreshClientContexts();
   const datesUpdated = await refreshProgramDates(masterClients);
+  const statusesSynced = await syncProgramStatuses();
 
   console.log(`Reuniones leidas: ${stats.meetings}`);
   console.log(`Reuniones con cliente detectado: ${stats.withClient}`);
@@ -585,7 +598,7 @@ async function main() {
     if (missing.length) throw new Error(`${missing.length} Fathom recordings still absent after import.`);
     console.log(`Cobertura verificada: ${seenIds.size} grabaciones unicas de Fathom presentes en Supabase.`);
   }
-  console.log(APPLY ? `Fechas vacias completadas (sin cambiar estados): ${datesUpdated}` : "");
+  console.log(APPLY ? `Fechas vacias completadas: ${datesUpdated} · estados sincronizados con la fecha de fin: ${statusesSynced ?? "no disponible"}` : "");
 }
 
 main().catch((error) => {

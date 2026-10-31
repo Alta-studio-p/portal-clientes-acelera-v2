@@ -22,22 +22,24 @@ export function PageHeading({ title, subtitle, kicker, actions }: { title: strin
 
 /**
  * Selector tipo pastilla: botones en una barra redondeada gris; la opción activa va en blanco con sombra suave.
- * Con más de 6 opciones muestra un desplegable con el mismo estilo redondeado. En pantallas angostas hace scroll horizontal.
+ * Con más opciones que `collapseAfter` (6 por defecto) muestra un desplegable con el mismo estilo redondeado.
+ * En pantallas angostas hace scroll horizontal. `hideLabel` deja la etiqueta solo para lectores de pantalla; `compact` achica la barra.
  */
-export function SegmentedControl({ label, options, value, onChange, disabled = false }: {
-  label: string; options: { value: string; label: string }[]; value: string; onChange: (value: string) => void; disabled?: boolean;
+export function SegmentedControl({ label, options, value, onChange, disabled = false, hideLabel = false, compact = false, collapseAfter = 6 }: {
+  label: string; options: { value: string; label: string }[]; value: string; onChange: (value: string) => void; disabled?: boolean; hideLabel?: boolean; compact?: boolean; collapseAfter?: number;
 }) {
-  if (options.length > 6) {
-    return <label className="block w-full sm:w-64"><span className="mb-1.5 block text-xs font-medium text-muted">{label}</span>
+  const labelClass = hideLabel ? 'sr-only' : 'mb-1.5 block text-xs font-medium text-muted';
+  if (options.length > collapseAfter) {
+    return <label className="block w-full sm:w-64"><span className={labelClass}>{label}</span>
       <select className={`${pillField} w-full`} value={value} disabled={disabled} onChange={e => onChange(e.target.value)}>{options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select>
     </label>;
   }
-  return <div>
-    <span className="mb-1.5 block text-xs font-medium text-muted">{label}</span>
+  return <div className="min-w-0">
+    <span className={labelClass}>{label}</span>
     <div role="radiogroup" aria-label={label} className="-mx-4 max-w-[100vw] overflow-x-auto px-4 sm:mx-0 sm:max-w-full sm:px-0">
-      <div className="inline-flex gap-1 rounded-2xl border border-border bg-surface-muted p-1">
+      <div className={`inline-flex gap-1 rounded-2xl border border-border bg-surface-muted ${compact ? 'p-0.5' : 'p-1'}`}>
         {options.map(o => <button key={o.value} type="button" role="radio" aria-checked={o.value === value} disabled={disabled} onClick={() => onChange(o.value)}
-          className={`whitespace-nowrap rounded-xl px-4 py-2 text-sm font-medium transition focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-60 ${o.value === value ? 'bg-surface text-foreground shadow-sm' : 'text-muted hover:text-foreground'}`}>{o.label}</button>)}
+          className={`whitespace-nowrap rounded-xl font-medium transition focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-60 ${compact ? 'px-3 py-1.5 text-sm' : 'px-4 py-2 text-sm'} ${o.value === value ? 'bg-surface text-foreground shadow-sm' : 'text-muted hover:text-foreground'}`}>{o.label}</button>)}
       </div>
     </div>
   </div>;
@@ -48,7 +50,11 @@ const shiftMonth = (month: string, step: number) => { const [y, m] = month.split
 /** "2026-10" → "Octubre 2026" */
 export function monthLabelEs(month: string) { const [y, m] = month.split('-').map(Number); return `${MONTH_NAMES[m - 1]} ${y}`; }
 /** Meses disponibles en el desplegable, el más reciente primero: desde enero de 2025 hasta 2 meses después del actual. */
-export function monthOptions(selected: string, current: string) {
+export function monthOptions(selected: string, current: string, months?: string[]) {
+  if (months) {
+    const all = [...new Set([...months, ...(selected ? [selected] : [])])].sort().reverse();
+    return all.map(m => ({ value: m, label: monthLabelEs(m) }));
+  }
   const first = selected < '2025-01' ? selected : '2025-01';
   const lastWanted = shiftMonth(current, 2);
   const last = selected > lastWanted ? selected : lastWanted;
@@ -57,18 +63,28 @@ export function monthOptions(selected: string, current: string) {
   return list;
 }
 
-/** Tarjeta blanca de ancho completo: etiqueta del periodo, flecha anterior, mes (en español), flecha siguiente; a la derecha, las acciones (exportar). */
-export function PeriodBar({ label, month, currentMonth, onChange, previousTitle, nextTitle, disabled = false, actions }: {
-  label: string; month: string; currentMonth: string; onChange: (month: string) => void; previousTitle: string; nextTitle: string; disabled?: boolean; actions?: ReactNode;
+/**
+ * Tarjeta blanca de ancho completo: etiqueta del periodo, flecha anterior, mes (en español), flecha siguiente; a la derecha, las acciones.
+ * Con `allLabel` la primera opción es "todos los meses" (valor ''). `months` limita las opciones a esos meses.
+ */
+export function PeriodBar({ label, month, currentMonth, onChange, previousTitle, nextTitle, disabled = false, actions, allLabel, months }: {
+  label: string; month: string; currentMonth: string; onChange: (month: string) => void; previousTitle: string; nextTitle: string; disabled?: boolean; actions?: ReactNode; allLabel?: string; months?: string[];
 }) {
+  const list = monthOptions(month, currentMonth, months);
+  const oldest = list.length ? list[list.length - 1].value : '';
+  const newest = list.length ? list[0].value : '';
+  const previous = months ? (month === '' ? newest : month > oldest ? shiftMonth(month, -1) : month) : shiftMonth(month || currentMonth, -1);
+  const noPrevious = !!months && (list.length === 0 || (month !== '' && month <= oldest));
+  const noNext = month === '' || (!!months && month >= newest);
   return <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-surface px-4 py-3">
     <div className="flex flex-wrap items-center gap-2.5">
       <span className="text-sm text-muted">{label}</span>
-      <button type="button" disabled={disabled} className={pillIconButton} onClick={() => onChange(shiftMonth(month, -1))} title={previousTitle} aria-label={previousTitle}><ChevronLeft size={16} /></button>
+      <button type="button" disabled={disabled || noPrevious} className={pillIconButton} onClick={() => onChange(previous)} title={previousTitle} aria-label={previousTitle}><ChevronLeft size={16} /></button>
       <select aria-label={label} value={month} disabled={disabled} onChange={e => onChange(e.target.value)} className={`${pillField} min-w-44 font-medium`}>
-        {monthOptions(month, currentMonth).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        {allLabel && <option value="">{allLabel}</option>}
+        {list.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
-      <button type="button" disabled={disabled} className={pillIconButton} onClick={() => onChange(shiftMonth(month, 1))} title={nextTitle} aria-label={nextTitle}><ChevronRight size={16} /></button>
+      <button type="button" disabled={disabled || noNext} className={pillIconButton} onClick={() => onChange(shiftMonth(month, 1))} title={nextTitle} aria-label={nextTitle}><ChevronRight size={16} /></button>
     </div>
     {actions && <div className="flex items-center gap-2">{actions}</div>}
   </div>;

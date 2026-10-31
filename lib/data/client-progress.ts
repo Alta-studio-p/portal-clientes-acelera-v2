@@ -9,6 +9,11 @@ export async function getStaffProgress(previewCoachId?: string) {
   const coach = session.profile.role === 'coach' ? await getCoachByProfileId(session.userId) : null;
   const coachId = session.profile.role === 'coach' ? coach?.id : previewCoachId;
   if (session.profile.role === 'coach' && !coachId) throw new Error('Coach no asociado.');
+  return { ...(await loadProgress(coachId)), isAdmin: session.profile.role === 'admin' && !previewCoachId };
+}
+
+/** Datos de Progreso sin comprobar sesión: solo para usarse después de verificar permisos (o en la revisión local). */
+export async function loadProgress(coachId?: string | null) {
   const sql = getSql();
   const clients = await sql`
     with session_stats as materialized (
@@ -54,6 +59,7 @@ export async function getStaffProgress(previewCoachId?: string) {
     order by c.entry_order nulls last, c.full_name nulls last, c.email
   `;
   const categories = await sql`select id::text,label,active from public.client_progress_categories order by label`;
+  const [{ today }] = await sql`select ((now() at time zone 'America/Bogota')::date)::text as today`;
   const coaches = await sql`select id::text, coalesce(full_name,email) as name, is_support_coach as "isSupport" from public.coaches where is_active order by coalesce(full_name,email)`;
-  return { clients: clients as unknown as ProgressClient[], categories: categories as unknown as ProgressCategory[], coaches: coaches as unknown as ProgressCoach[], isAdmin: session.profile.role === 'admin' && !previewCoachId };
+  return { clients: clients as unknown as ProgressClient[], categories: categories as unknown as ProgressCategory[], coaches: coaches as unknown as ProgressCoach[], today: today as string };
 }

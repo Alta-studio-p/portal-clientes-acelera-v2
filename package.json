@@ -4,9 +4,12 @@
   "private": true,
   "scripts": {
     "setup:coach-fees": "node --env-file=.env.local scripts/setup-coach-fees.mjs",
+    "setup:program-status": "node --env-file=.env.local scripts/setup-program-status.mjs",
+    "sync:client-status": "node --env-file=.env.local scripts/sync-client-status.mjs",
+    "sync:sheet-order": "node --env-file=.env.local scripts/sync-sheet-order.mjs",
     "setup:call-attribution": "node --env-file=.env.local scripts/setup-call-attribution.mjs",
     "backfill:call-attribution": "node --env-file=.env.local scripts/backfill-call-attribution.mjs",
-    "test:attribution": "node scripts/test-client-matching.mjs && node scripts/test-import-preservation.mjs",
+    "test:attribution": "node scripts/test-client-matching.mjs && node scripts/test-import-preservation.mjs && node scripts/test-program-phase.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
