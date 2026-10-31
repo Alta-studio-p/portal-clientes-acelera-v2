@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { matchClient, INTERNAL_DOMAIN, IGNORED_EMAIL_DOMAINS as EXCLUDED_EMAIL_DOMAINS, IGNORED_EMAILS as EXCLUDED_EMAILS } from "../lib/client-matching.mjs";
 import { normalizeIdentity } from "../lib/client-matching.mjs";
-import { resolveCallCoach } from "../lib/coach-attribution.mjs";
+import { resolveCallCoach, sessionKey } from "../lib/coach-attribution.mjs";
 import { contextFromCall } from "../lib/call-context.mjs";
 
 const APPLY = process.argv.includes("--apply") && process.env.FATHOM_AUDIT_ONLY !== "true";
@@ -227,7 +227,7 @@ async function allRows(path, order = "id") {
 }
 
 async function readCoaches() {
-  return allRows("coaches?select=id,email,full_name,fathom_source_key,alternate_emails");
+  return allRows("coaches?select=id,email,full_name,fathom_source_key,alternate_emails,bills_by_call");
 }
 
 async function readClients() {
@@ -285,7 +285,7 @@ async function upsertCall(row, knownCalls) {
   }
   if (existing?.coach_id) {
     // El coach solo se corrige con un dato fiable (quién grabó) y nunca si se fijó a mano.
-    const reliable = payload.coach_resolution === "recorded_by" && existing.coach_resolution !== "manual";
+    const reliable = ["recorded_by", "participant"].includes(payload.coach_resolution) && existing.coach_resolution !== "manual";
     if (!reliable) {
       delete payload.coach_id;
       delete payload.coach_resolution;
@@ -421,7 +421,7 @@ async function main() {
   const clients = await readClients();
   const masterClients = readMasterClients(clients);
   const assignedCoachFor = await readAssignedCoaches();
-  const knownCalls = new Map((await allRows("calls?select=id,fathom_call_id,client_id,coach_id,coach_resolution,summary,next_steps,raw_metadata")).map(call => [call.fathom_call_id, call]));
+  const knownCalls = new Map((await allRows("calls?select=id,fathom_call_id,client_id,coach_id,coach_resolution,title,started_at,summary,next_steps,raw_metadata")).map(call => [call.fathom_call_id, call]));
   const seenIds = new Set();
   const stats = {
     meetings: 0,
@@ -433,6 +433,18 @@ async function main() {
     missing: 0,
     ambiguous: 0,
   };
+
+  // La cuenta que no cobra por llamada (Caro) se procesa al final: así ya se conocen las
+  // grabaciones propias de cada coach y su copia del mismo encuentro no se atribuye dos veces.
+  const billsByCall = (source) => coaches.get(source.key)?.bills_by_call !== false;
+  fathomSources.sort((a, b) => Number(billsByCall(b)) - Number(billsByCall(a)));
+  const localDay = (iso) => (iso ? new Date(iso).toLocaleDateString("en-CA", { timeZone: "America/Bogota" }) : "");
+  const billingCoachIds = new Set(coachList.filter((c) => c.bills_by_call !== false).map((c) => c.id));
+  const ownKeys = new Set(
+    [...knownCalls.values()]
+      .filter((call) => billingCoachIds.has(call.coach_id) && call.raw_metadata?.recorded_by?.email)
+      .map((call) => sessionKey(localDay(call.started_at), call.title)),
+  );
 
   for (const source of fathomSources) {
     const coach = coaches.get(source.key);
@@ -460,6 +472,8 @@ async function main() {
       // El coach es quien grabó la llamada; si no se sabe, el coach del cliente (y se marca por confirmar).
       const attribution = resolveCallCoach({
         recordedByEmail: meeting.recorded_by?.email,
+        participantEmails: (meeting.calendar_invitees ?? []).map((invitee) => invitee.email),
+        hasOwnRecording: billsByCall(source) ? false : ownKeys.has(sessionKey(localDay(dateFromMeeting(meeting)), rawTitle)),
         coaches: coachList,
         assignedCoachId: client ? assignedCoachFor(client.id) : null,
         sourceCoachId: coach?.id,
@@ -507,6 +521,7 @@ async function main() {
       };
 
       const savedCall = await upsertCall(row, knownCalls);
+      if (billsByCall(source) && meeting.recorded_by?.email) ownKeys.add(sessionKey(localDay(row.started_at), row.title));
       if (APPLY) {
         stats.imported += 1;
         await upsertParticipants(savedCall?.id, meeting);

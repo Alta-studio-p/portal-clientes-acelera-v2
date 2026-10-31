@@ -12,3 +12,8 @@ alter table public.calls add column if not exists coach_needs_confirmation boole
 
 -- La coach principal no cobra por llamadas: no aparece en la sección Llamadas.
 alter table public.coaches add column if not exists bills_by_call boolean not null default true;
+
+-- Llamada grabada por la coach principal y atribuida al coach que participó.
+alter table public.calls drop constraint if exists calls_coach_resolution_check;
+alter table public.calls add constraint calls_coach_resolution_check
+  check (coach_resolution in ('recorded_by', 'participant', 'fallback', 'manual'));

@@ -46,4 +46,10 @@ assert.equal(resolveCallCoach({ recordedByEmail: 'mari.aceleratalent@gmail.com',
 // Sin dato fiable: respaldo y aviso. Una llamada existente conserva su coach.
 assert.deepEqual(resolveCallCoach({ recordedByEmail: 'otro@x.com', coaches, assignedCoachId: 'alex' }), { coachId: 'alex', resolution: 'fallback', needsConfirmation: true });
 assert.equal(resolveCallCoach({ coaches, keepCoachId: 'mari', assignedCoachId: 'alex' }).coachId, 'mari');
+// Caro (no cobra por llamada) graba y asiste un solo coach: es de ese coach; si el coach ya la grabó, la copia de Caro no se atribuye.
+const team = [...coaches, { id: 'caro', email: 'coach@joinaceleratalent.com', bills_by_call: false }];
+assert.deepEqual(resolveCallCoach({ recordedByEmail: 'coach@joinaceleratalent.com', participantEmails: ['coach@joinaceleratalent.com', 'mari@joinaceleratalent.com'], coaches: team }), { coachId: 'mari', resolution: 'participant', needsConfirmation: false });
+assert.equal(resolveCallCoach({ recordedByEmail: 'coach@joinaceleratalent.com', participantEmails: ['coach@joinaceleratalent.com', 'mari@joinaceleratalent.com'], coaches: team, hasOwnRecording: true }).coachId, 'caro');
+assert.equal(resolveCallCoach({ recordedByEmail: 'coach@joinaceleratalent.com', participantEmails: ['alex@joinaceleratalent.com', 'mari@joinaceleratalent.com'], coaches: team }).coachId, 'caro'); // dos coaches: no se adivina
+assert.equal(resolveCallCoach({ recordedByEmail: 'coach@joinaceleratalent.com', participantEmails: ['coach@joinaceleratalent.com'], coaches: team }).coachId, 'caro');
 console.log('PASS: vínculo email → alterno → nombre, sin adivinar; coach = quien grabó');

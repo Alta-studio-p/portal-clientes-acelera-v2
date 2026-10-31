@@ -4,11 +4,13 @@
 // valores, estados ni fechas de pago; solo actualiza campos de atribución.
 import { createSqlClient } from '../lib/postgres.mjs';
 import { matchClient, clientInvitees } from '../lib/client-matching.mjs';
-import { resolveCallCoach } from '../lib/coach-attribution.mjs';
+import { resolveCallCoach, sessionKey } from '../lib/coach-attribution.mjs';
 import { fathomSourcesFromEnv, listMeetingsLight } from '../lib/fathom-api.mjs';
 
 const APPLY = process.argv.includes('--apply');
 const SKIP_FATHOM = process.argv.includes('--skip-fathom');
+// Solo atribución de coach: no toca los vínculos de clientes.
+const ONLY_COACH = process.argv.includes('--only-coach');
 const MONTH = process.argv.find(a => a.startsWith('--month='))?.split('=')[1] ?? '2026-10';
 if (!/^20\d{2}-(0[1-9]|1[0-2])$/.test(MONTH)) throw new Error('--month debe ser AAAA-MM.');
 
@@ -24,13 +26,15 @@ try {
       client_match_method, coach_resolution, (started_at at time zone 'America/Bogota')::date::text as local_date
     from public.calls order by started_at nulls last`;
   const clients = await sql`select id::text, email, full_name, alternate_emails from public.clients`;
-  const coaches = await sql`select id::text, email, full_name, alternate_emails from public.coaches`;
-  const participants = await sql`select call_id::text, email, name from public.call_participants where role_hint = 'client'`;
+  const coaches = await sql`select id::text, email, full_name, alternate_emails, bills_by_call from public.coaches`;
+  const allParticipants = await sql`select call_id::text, email, name, role_hint from public.call_participants`;
+  const participants = allParticipants.filter(p => p.role_hint === 'client');
   const fees = await sql`select call_id::text, paid_on::text from public.coach_fees where call_id is not null`;
   const assignments = await sql`select client_id::text, coach_id::text, is_primary from public.coach_client_assignments`;
   const coachName = id => coaches.find(c => c.id === id)?.full_name ?? coaches.find(c => c.id === id)?.email ?? '—';
   const clientName = id => clients.find(c => c.id === id)?.full_name ?? '—';
   const participantsByCall = Map.groupBy(participants, p => p.call_id);
+  const emailsByCall = Map.groupBy(allParticipants, p => p.call_id);
   const feeByCall = new Map(fees.map(f => [f.call_id, f]));
   const assignedCoach = clientId => {
     const rows = assignments.filter(a => a.client_id === clientId);
@@ -85,7 +89,7 @@ try {
   const unlinked = calls.filter(c => !c.client_id);
   const linkedBy = { email: [], alt_email: [], name: [] };
   const stillUnlinked = [];
-  for (const call of unlinked) {
+  for (const call of ONLY_COACH ? [] : unlinked) {
     const result = matchClient({ invitees: invitees(call), title: call.title }, clients);
     if (!result.client) { stillUnlinked.push({ call, reason: result.reason }); continue; }
     linkedBy[result.method].push({ call, result });
@@ -112,10 +116,14 @@ try {
 
   // 3. Coach: quien grabó la llamada.
   const inMonth = calls.filter(c => c.local_date?.startsWith(MONTH) && c.coach_resolution !== 'manual');
+  // Encuentros que el propio coach (que cobra por llamada) ya grabó: la copia de Caro no se atribuye.
+  const billingEmails = new Map(coaches.filter(c => c.bills_by_call).flatMap(c => [c.email, ...(c.alternate_emails ?? [])].map(e => [String(e).toLowerCase(), c.id])));
+  const ownRecordings = new Set(calls.filter(c => billingEmails.has(String(c.raw_metadata?.recorded_by?.email ?? '').toLowerCase())).map(c => sessionKey(c.local_date, c.title)));
   const changes = [], flagged = [], unknownRecorders = new Map();
   for (const call of inMonth) {
     const recordedByEmail = call.raw_metadata?.recorded_by?.email ?? null;
-    const outcome = resolveCallCoach({ recordedByEmail, coaches, keepCoachId: call.coach_id, assignedCoachId: call.client_id ? assignedCoach(call.client_id) : null });
+    const outcome = resolveCallCoach({ recordedByEmail, coaches, participantEmails: (emailsByCall.get(call.id) ?? []).map(p => p.email),
+      hasOwnRecording: ownRecordings.has(sessionKey(call.local_date, call.title)) && !billingEmails.has(String(recordedByEmail ?? '').toLowerCase()), keepCoachId: call.coach_id, assignedCoachId: call.client_id ? assignedCoach(call.client_id) : null });
     if (outcome.resolution === 'fallback' && recordedByEmail) unknownRecorders.set(recordedByEmail, (unknownRecorders.get(recordedByEmail) ?? 0) + 1);
     await write(`update public.calls set coach_id = $2::uuid, coach_resolution = $3, coach_needs_confirmation = $4 where id = $1::uuid`, [call.id, outcome.coachId, outcome.resolution, outcome.needsConfirmation]);
     if (outcome.needsConfirmation) flagged.push(call);
