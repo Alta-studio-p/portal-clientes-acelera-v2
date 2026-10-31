@@ -16,6 +16,8 @@ export interface FeeRow {
   /** Coach asignado al cliente, solo cuando es distinto del coach que hizo la llamada. */
   client_coach_name: string | null;
   coach_needs_confirmation: boolean;
+  /** Duración de la grabación en Fathom, para las llamadas. */
+  duration_minutes: number | null;
 }
 
 export const MATCH_METHOD_LABELS = {

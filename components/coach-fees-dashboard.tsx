@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, ChevronRight, Download, ExternalLink, Pencil, Plus, Search, X } from 'lucide-react';
 import { saveFee } from '@/app/admin/fees/actions';
+import { SHORT_CALL_MINUTES } from '@/lib/call-hours.mjs';
 import { CALL_HOURLY_RATE, currentMonth, feeDate, money, monthBounds, MATCH_METHOD_LABELS, PAYMENT_TYPES, safeRecordingUrl, type FeeRow } from '@/lib/coach-fees';
 
 type Option = { id: string; name: string };
@@ -56,7 +57,7 @@ export function CoachFeesDashboard({ coaches, coachId, month, rows, clients, all
       <div><p className="mb-1 text-sm font-medium text-accent">{readOnly ? coachName : 'Administración'}</p><h1 className="text-2xl font-semibold">{readOnly ? 'Mis llamadas' : 'Llamadas de coaches'}</h1></div>
       <div className="flex gap-2">
         <button onClick={exportCsv} disabled={!filtered.length || pending} className={`${iconButton} disabled:opacity-40`} title="Exportar CSV" aria-label="Exportar CSV"><Download size={18} /></button>
-        {!readOnly && <button disabled={pending} onClick={() => setEditing({ id: null, call_id: null, coach_id: coachId, client_id: null, client_name: '', service_date: month === currentMonth() ? new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()) : monthBounds(month).from, topic: '', hours: null, amount: null, payment_type: null, paid_on: null, recording_url: null, client_match_method: null, client_coach_name: null, coach_needs_confirmation: false })} className="inline-flex min-h-11 items-center gap-2 rounded-md bg-accent px-4 text-sm font-medium text-white transition hover:bg-accent-hover disabled:opacity-40"><Plus size={18} />Registrar actividad</button>}
+        {!readOnly && <button disabled={pending} onClick={() => setEditing({ id: null, call_id: null, coach_id: coachId, client_id: null, client_name: '', service_date: month === currentMonth() ? new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()) : monthBounds(month).from, topic: '', hours: null, amount: null, payment_type: null, paid_on: null, recording_url: null, client_match_method: null, client_coach_name: null, coach_needs_confirmation: false, duration_minutes: null })} className="inline-flex min-h-11 items-center gap-2 rounded-md bg-accent px-4 text-sm font-medium text-white transition hover:bg-accent-hover disabled:opacity-40"><Plus size={18} />Registrar actividad</button>}
       </div>
     </div>
 
@@ -97,7 +98,7 @@ export function CoachFeesDashboard({ coaches, coachId, month, rows, clients, all
           {filtered.map(r => <tr key={r.call_id ?? r.id} className="even:bg-background/70 hover:bg-accent-soft/40">
             <td className="whitespace-nowrap px-4 py-3.5 tabular-nums">{feeDate(r.service_date)}</td>
             <td className="max-w-52 px-4 py-3.5 font-medium">{r.client_id ? <Link href={`${clientBasePath ?? `/${readOnly ? 'coach' : 'admin'}/clients`}/${r.client_id}`} title={r.client_match_method ? MATCH_METHOD_LABELS[r.client_match_method] : undefined} className="hover:text-accent hover:underline">{r.client_name}</Link> : <span className="text-muted">{r.client_name}</span>}{r.client_coach_name && <span className="mt-0.5 block text-xs font-normal text-muted">Cliente de {r.client_coach_name}</span>}</td>
-            <td className="min-w-48 max-w-80 px-4 py-3.5"><span className="line-clamp-2" title={r.topic}>{r.topic}</span>{!r.call_id && <span className="mt-1 block text-xs text-muted">Actividad manual</span>}{r.coach_needs_confirmation && <span className="mt-1 block text-xs font-medium text-[var(--status-extension)]">Coach por confirmar</span>}</td>
+            <td className="min-w-48 max-w-80 px-4 py-3.5"><span className="line-clamp-2" title={r.topic}>{r.topic}</span>{!r.call_id && <span className="mt-1 block text-xs text-muted">Actividad manual</span>}{r.duration_minutes !== null && <span className="mt-1 block text-xs text-muted">Fathom: {r.duration_minutes} min{r.duration_minutes < SHORT_CALL_MINUTES ? ' · muy corta, revisar' : ''}</span>}{r.coach_needs_confirmation && <span className="mt-1 block text-xs font-medium text-[var(--status-extension)]">Coach por confirmar</span>}</td>
             <td className="px-4 py-3.5 text-right tabular-nums">{r.hours === null ? '—' : number(r.hours)}</td>
             <td className="whitespace-nowrap px-4 py-3.5 text-right font-medium tabular-nums">{r.amount === null ? '—' : money(r.amount)}</td>
             <td className="px-4 py-3.5 text-muted">{PAYMENT_TYPES.find(p => p.value === r.payment_type)?.label ?? '—'}</td>

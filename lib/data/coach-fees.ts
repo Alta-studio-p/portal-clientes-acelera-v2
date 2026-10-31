@@ -4,6 +4,7 @@ import { getCoachByProfileId } from '@/lib/data/client-detail';
 import { getSql } from '@/lib/db';
 import { displayCallTitle } from '@/lib/call-title';
 import { publicRecordingUrl } from '@/lib/recording-link';
+import { hoursForMinutes } from '@/lib/call-hours.mjs';
 import { CALL_HOURLY_RATE, monthBounds, type FeeRow } from '@/lib/coach-fees';
 
 /** Coaches que cobran por llamada (la coach principal no aparece en la sección Llamadas). */
@@ -32,8 +33,8 @@ export async function getCoachFees(coachId: string, month: string): Promise<FeeR
         (case when f.id is null then c.client_id else f.client_id end)::text as client_id,
         coalesce(f.service_date, (c.started_at at time zone 'America/Bogota')::date)::text as service_date,
         f.topic, c.title, c.display_title, c.summary,
-        coalesce(f.hours, 1)::float8 as hours,
-        coalesce(f.amount, coalesce(f.hours, 1) * ${CALL_HOURLY_RATE})::float8 as amount,
+        f.hours::float8 as hours, f.amount::float8 as amount,
+        round(c.duration_seconds / 60.0)::int as duration_minutes,
         f.payment_type, f.paid_on::text,
         c.share_url, c.client_match_method, c.coach_needs_confirmation
       from public.calls c
@@ -41,7 +42,7 @@ export async function getCoachFees(coachId: string, month: string): Promise<FeeR
       where c.coach_id = ${coachId}::uuid and c.started_at is not null
       union all
       select f.id::text, null, f.coach_id::text, f.client_id::text, f.service_date::text,
-        f.topic, null, null, null, f.hours::float8, f.amount::float8,
+        f.topic, null, null, null, f.hours::float8, f.amount::float8, null::int,
         f.payment_type, f.paid_on::text, null::text, null::text, false
       from public.coach_fees f
       where f.coach_id = ${coachId}::uuid and f.call_id is null
@@ -61,7 +62,12 @@ export async function getCoachFees(coachId: string, month: string): Promise<FeeR
     where e.service_date::date >= ${from}::date and e.service_date::date < ${to}::date
     order by e.service_date desc, e.call_id nulls last, e.id
   `;
-  return rows.map(row => ({
+  return rows.map(row => {
+    // Llamadas sin honorario guardado: las horas salen de la duración (≤40 min = media hora, ~2 h = 2 h).
+    const isCall = row.call_id !== null;
+    const hours = (row.hours as number | null) ?? (isCall ? hoursForMinutes(row.duration_minutes as number | null) ?? 1 : null);
+    const amount = (row.amount as number | null) ?? (isCall && hours !== null ? hours * CALL_HOURLY_RATE : null);
+    return {
     id: row.id as string | null,
     call_id: row.call_id as string | null,
     coach_id: row.coach_id as string,
@@ -69,13 +75,15 @@ export async function getCoachFees(coachId: string, month: string): Promise<FeeR
     client_name: row.client_name as string,
     service_date: row.service_date as string,
     topic: (row.topic as string) || displayCallTitle(row as { title: string | null; display_title: string | null; summary: string | null }),
-    hours: row.hours as number | null,
-    amount: row.amount as number | null,
+    hours,
+    amount,
     payment_type: row.payment_type as string | null,
     paid_on: row.paid_on as string | null,
     recording_url: publicRecordingUrl({ share_url: row.share_url as string | null }),
     client_match_method: row.client_match_method as FeeRow['client_match_method'],
     client_coach_name: row.client_coach_name as string | null,
     coach_needs_confirmation: !!row.coach_needs_confirmation,
-  }));
+    duration_minutes: row.duration_minutes as number | null,
+  };
+  });
 }
