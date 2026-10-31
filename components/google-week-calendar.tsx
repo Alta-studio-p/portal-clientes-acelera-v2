@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ExternalLink, Play } from "lucide-react";
 import type { MonthCalendarCall } from "@/lib/data/admin";
 import { displayCallTitle } from "@/lib/call-title";
+import { publicRecordingUrl } from "@/lib/recording-link";
 
 const TIME_ZONE = "America/Bogota";
 const HOUR_HEIGHT = 72; // px
@@ -327,9 +328,9 @@ function CallPopover({ call, color, onClose }: { call: MonthCalendarCall; color:
             Ver resumen
           </Link>
         )}
-        {call.recording_url && (
+        {publicRecordingUrl(call) && (
           <a
-            href={call.recording_url}
+            href={publicRecordingUrl(call)!}
             target="_blank"
             rel="noreferrer"
             className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-sm font-semibold text-foreground hover:bg-surface-muted"

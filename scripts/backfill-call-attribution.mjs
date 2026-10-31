@@ -6,6 +6,7 @@ import { createSqlClient } from '../lib/postgres.mjs';
 import { matchClient, clientInvitees } from '../lib/client-matching.mjs';
 import { resolveCallCoach, sessionKey } from '../lib/coach-attribution.mjs';
 import { fathomSourcesFromEnv, listMeetingsLight } from '../lib/fathom-api.mjs';
+import { fetchCallSpeakers, speakingCoachEmails } from '../lib/call-speakers.mjs';
 
 const APPLY = process.argv.includes('--apply');
 const SKIP_FATHOM = process.argv.includes('--skip-fathom');
@@ -34,7 +35,6 @@ try {
   const coachName = id => coaches.find(c => c.id === id)?.full_name ?? coaches.find(c => c.id === id)?.email ?? '—';
   const clientName = id => clients.find(c => c.id === id)?.full_name ?? '—';
   const participantsByCall = Map.groupBy(participants, p => p.call_id);
-  const emailsByCall = Map.groupBy(allParticipants, p => p.call_id);
   const feeByCall = new Map(fees.map(f => [f.call_id, f]));
   const assignedCoach = clientId => {
     const rows = assignments.filter(a => a.client_id === clientId);
@@ -122,7 +122,14 @@ try {
   const changes = [], flagged = [], unknownRecorders = new Map();
   for (const call of inMonth) {
     const recordedByEmail = call.raw_metadata?.recorded_by?.email ?? null;
-    const outcome = resolveCallCoach({ recordedByEmail, coaches, participantEmails: (emailsByCall.get(call.id) ?? []).map(p => p.email),
+    // Grabó la cuenta que no cobra por llamada: quién habló en la transcripción pública (se guarda en raw_metadata).
+    let speakerEmails = call.raw_metadata?.speaking_coach_emails;
+    const recorderCoach = coaches.find(c => [c.email, ...(c.alternate_emails ?? [])].map(e => String(e).toLowerCase()).includes(String(recordedByEmail ?? '').toLowerCase()));
+    if (!speakerEmails && recorderCoach && !recorderCoach.bills_by_call && call.client_id && call.share_url) {
+      const speakers = await fetchCallSpeakers(call.share_url);
+      if (speakers) { speakerEmails = speakingCoachEmails(speakers); await write(`update public.calls set raw_metadata = coalesce(raw_metadata, '{}'::jsonb) || $2::jsonb where id = $1::uuid`, [call.id, JSON.stringify({ speaking_coach_emails: speakerEmails })]); }
+    }
+    const outcome = resolveCallCoach({ recordedByEmail, coaches, speakerEmails: speakerEmails ?? [],
       hasOwnRecording: ownRecordings.has(sessionKey(call.local_date, call.title)) && !billingEmails.has(String(recordedByEmail ?? '').toLowerCase()), keepCoachId: call.coach_id, assignedCoachId: call.client_id ? assignedCoach(call.client_id) : null });
     if (outcome.resolution === 'fallback' && recordedByEmail) unknownRecorders.set(recordedByEmail, (unknownRecorders.get(recordedByEmail) ?? 0) + 1);
     await write(`update public.calls set coach_id = $2::uuid, coach_resolution = $3, coach_needs_confirmation = $4 where id = $1::uuid`, [call.id, outcome.coachId, outcome.resolution, outcome.needsConfirmation]);

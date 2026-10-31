@@ -2,6 +2,7 @@ import fs from "node:fs";
 import { matchClient, INTERNAL_DOMAIN, IGNORED_EMAIL_DOMAINS as EXCLUDED_EMAIL_DOMAINS, IGNORED_EMAILS as EXCLUDED_EMAILS } from "../lib/client-matching.mjs";
 import { normalizeIdentity } from "../lib/client-matching.mjs";
 import { resolveCallCoach, sessionKey } from "../lib/coach-attribution.mjs";
+import { fetchCallSpeakers, speakingCoachEmails } from "../lib/call-speakers.mjs";
 import { contextFromCall } from "../lib/call-context.mjs";
 
 const APPLY = process.argv.includes("--apply") && process.env.FATHOM_AUDIT_ONLY !== "true";
@@ -470,14 +471,20 @@ async function main() {
       const client = matched.client;
       if (matched.reason.startsWith("ambiguous")) stats.ambiguous += 1;
       // El coach es quien grabó la llamada; si no se sabe, el coach del cliente (y se marca por confirmar).
-      const attribution = resolveCallCoach({
+      const attributionInput = {
         recordedByEmail: meeting.recorded_by?.email,
-        participantEmails: (meeting.calendar_invitees ?? []).map((invitee) => invitee.email),
         hasOwnRecording: billsByCall(source) ? false : ownKeys.has(sessionKey(localDay(dateFromMeeting(meeting)), rawTitle)),
         coaches: coachList,
         assignedCoachId: client ? assignedCoachFor(client.id) : null,
         sourceCoachId: coach?.id,
-      });
+      };
+      let attribution = resolveCallCoach(attributionInput);
+      // Grabó la cuenta que no cobra por llamada: se lee quién habló en la transcripción pública.
+      let speakers = null;
+      if (!billsByCall(source) && client && meeting.share_url) {
+        speakers = await fetchCallSpeakers(meeting.share_url);
+        attribution = resolveCallCoach({ ...attributionInput, speakerEmails: speakingCoachEmails(speakers) });
+      }
       if (!knownCalls.has(String(meeting.recording_id))) {
         if (!seenIds.has(String(meeting.recording_id))) stats.missing += 1;
         sourceMissing += 1;
@@ -516,6 +523,7 @@ async function main() {
           recording_end_time: meeting.recording_end_time,
           external_invitees: externalInvitees(meeting),
           recorded_by: meeting.recorded_by ?? null,
+          speaking_coach_emails: speakers ? speakingCoachEmails(speakers) : undefined,
           client_match_reason: matched.reason,
         },
       };

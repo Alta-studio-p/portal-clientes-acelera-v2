@@ -7,6 +7,7 @@ import { assignClientToCall } from '@/app/call-assignment-actions';
 import type { AssignmentClient, AttentionCall } from '@/lib/call-assignment';
 import { formatDate } from '@/lib/format';
 import { displayCallTitle } from '@/lib/call-title';
+import { publicRecordingUrl } from '@/lib/recording-link';
 import { MarkdownLite } from '@/components/markdown-lite';
 
 const control = 'min-h-11 rounded-md border border-border bg-surface px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-50';
@@ -18,7 +19,7 @@ function AssignmentCard({ call, clients, role, onAssigned, readOnly = false }: {
     if (result.success) onAssigned();
     return result;
   }, { error: null, success: false });
-  const recording = [call.share_url, call.recording_url].find(url => url && /^https:\/\//i.test(url));
+  const recording = publicRecordingUrl(call);
   return <article className="flex min-w-0 flex-col rounded-lg border border-border bg-surface p-4">
     <h3 className="break-words text-sm font-semibold text-foreground">{displayCallTitle(call)}</h3>
     <p className="mt-1 text-xs text-muted">{formatDate(call.started_at)}{call.coach_name ? ` · ${call.coach_name}` : ''}</p>

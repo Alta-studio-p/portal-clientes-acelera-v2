@@ -370,7 +370,7 @@ export interface MonthCalendarCall {
   summary: string | null;
   started_at: string | null;
   duration_seconds: number | null;
-  recording_url: string | null;
+  share_url: string | null;
   hasSummary: boolean;
 }
 
@@ -410,7 +410,7 @@ export async function getAdminMonthCalendar({
         call.summary,
         call.started_at::text,
         call.duration_seconds,
-        call.recording_url,
+        call.share_url,
         (call.summary is not null) as "hasSummary"
       from public.calls call
       left join public.coaches coach on coach.id = call.coach_id

@@ -63,8 +63,8 @@ export function CallReader({
           {formatDate(call.started_at)} · {formatDuration(call.duration_seconds)}
         </p>
         <div className="flex flex-wrap items-center gap-2">
-          {call.recording_url && (
-            <a href={call.recording_url} target="_blank" rel="noreferrer" className={pillButton}>
+          {publicRecordingUrl(call) && (
+            <a href={publicRecordingUrl(call)!} target="_blank" rel="noreferrer" className={pillButton}>
               <Play size={14} strokeWidth={2} aria-hidden="true" /> Ver grabación
             </a>
           )}
