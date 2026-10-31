@@ -4,6 +4,9 @@
   "private": true,
   "scripts": {
     "setup:coach-fees": "node --env-file=.env.local scripts/setup-coach-fees.mjs",
+    "setup:call-attribution": "node --env-file=.env.local scripts/setup-call-attribution.mjs",
+    "backfill:call-attribution": "node --env-file=.env.local scripts/backfill-call-attribution.mjs",
+    "test:attribution": "node scripts/test-client-matching.mjs && node scripts/test-import-preservation.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",

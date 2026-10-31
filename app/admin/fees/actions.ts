@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { requireRole } from '@/lib/auth';
 import { getSql } from '@/lib/db';
 import { CALL_HOURLY_RATE, PAYMENT_TYPES } from '@/lib/coach-fees';
+import { emailToLearn } from '@/lib/client-matching.mjs';
 
 export interface FeeState { error: string | null; success: boolean }
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -16,7 +17,8 @@ export async function saveFee(_previous: FeeState, form: FormData): Promise<FeeS
   const text = (key: string) => String(form.get(key) ?? '').trim();
   const id = text('id') || null;
   const callId = text('callId') || null;
-  const coachId = text('coachId');
+  let coachId = text('coachId');
+  const callCoachId = text('callCoachId') || null;
   const clientId = text('clientId') || null;
   const topic = text('topic');
   const serviceDate = text('serviceDate');
@@ -26,7 +28,7 @@ export async function saveFee(_previous: FeeState, form: FormData): Promise<FeeS
   const amount = text('amount') ? Number(text('amount').replace(',', '.')) : callId ? (hours ?? 1) * CALL_HOURLY_RATE : null;
   const fail = (error: string) => ({ error, success: false });
 
-  if (![coachId, ...[id, callId, clientId].filter((v): v is string => v !== null)].every(v => uuid.test(v))) return fail('Identificador no válido.');
+  if (![coachId, ...[id, callId, clientId, callCoachId].filter((v): v is string => v !== null)].every(v => uuid.test(v))) return fail('Identificador no válido.');
   if (!topic || topic.length > 500) return fail('Escribe un tema de hasta 500 caracteres.');
   if (!validDate(serviceDate) || (paidOn && !validDate(paidOn))) return fail('Revisa las fechas.');
   if (hours !== null && (!Number.isFinite(hours) || hours <= 0 || hours > 9999 || Math.abs(hours * 100 - Math.round(hours * 100)) > 0.00001)) return fail('Las horas deben ser mayores que cero, con máximo dos decimales.');
@@ -43,8 +45,37 @@ export async function saveFee(_previous: FeeState, form: FormData): Promise<FeeS
       if (!client) return fail('No se encontró el cliente.');
     }
     if (callId) {
-      const [call] = await sql`select id from public.calls where id = ${callId}::uuid and coach_id = ${coachId}::uuid`;
+      const [call] = await sql`select id, client_id::text, raw_metadata from public.calls where id = ${callId}::uuid and coach_id = ${coachId}::uuid`;
       if (!call) return fail('La llamada no pertenece a este coach.');
+      // La llamada es del coach que la hizo: corregirlo mueve la llamada y su honorario a su hoja.
+      if (callCoachId && callCoachId !== coachId) {
+        const [target] = await sql`select id from public.coaches where id = ${callCoachId}::uuid`;
+        if (!target) return fail('No se encontró el coach de la llamada.');
+        await sql.transaction(async tx => {
+          await tx`update public.calls set coach_id = ${callCoachId}::uuid, coach_resolution = 'manual', coach_needs_confirmation = false where id = ${callId}::uuid`;
+          await tx`update public.coach_fees set coach_id = ${callCoachId}::uuid where call_id = ${callId}::uuid`;
+        });
+        coachId = callCoachId;
+      } else if (callCoachId) {
+        await sql`update public.calls set coach_resolution = 'manual', coach_needs_confirmation = false where id = ${callId}::uuid and coach_needs_confirmation`;
+      }
+      // Vínculo manual de una llamada sin cliente: se guarda también el email del invitado como alterno.
+      if (clientId && !call.client_id) {
+        const audit = JSON.stringify({ client_match_reason: 'manual_assignment', client_assignment: { user_id: userId, role: 'admin', assigned_at: new Date().toISOString(), previous_client_id: null } });
+        await sql`
+          update public.calls set client_id = ${clientId}::uuid, client_match_method = 'manual',
+            raw_metadata = coalesce(raw_metadata, '{}'::jsonb) || ${audit}::jsonb
+          where id = ${callId}::uuid and client_id is null
+        `;
+        await sql`
+          insert into public.coach_client_assignments (coach_id, client_id, is_primary)
+          values (${coachId}::uuid, ${clientId}::uuid, false) on conflict (coach_id, client_id) do nothing
+        `;
+        const known = await sql`select email, alternate_emails from public.clients`;
+        const invitees = (call.raw_metadata as { external_invitees?: { email?: string }[] } | null)?.external_invitees ?? [];
+        const learn = emailToLearn(invitees, known as unknown as { email: string | null; alternate_emails: string[] | null }[]);
+        if (learn) await sql`update public.clients set alternate_emails = array_append(alternate_emails, ${learn}) where id = ${clientId}::uuid and not (${learn} = any(alternate_emails))`;
+      }
     }
     if (id) {
       const updated = await sql`

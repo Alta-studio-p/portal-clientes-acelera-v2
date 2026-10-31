@@ -1,38 +1,22 @@
 import fs from "node:fs";
-import { matchMeetingClient } from "../lib/meeting-client-match.mjs";
+import { matchClient, INTERNAL_DOMAIN, IGNORED_EMAIL_DOMAINS as EXCLUDED_EMAIL_DOMAINS, IGNORED_EMAILS as EXCLUDED_EMAILS } from "../lib/client-matching.mjs";
+import { normalizeIdentity } from "../lib/client-matching.mjs";
+import { resolveCallCoach } from "../lib/coach-attribution.mjs";
 import { contextFromCall } from "../lib/call-context.mjs";
 
 const APPLY = process.argv.includes("--apply") && process.env.FATHOM_AUDIT_ONLY !== "true";
 const MAX_PAGES = Number(process.env.FATHOM_MAX_PAGES || 200);
 const SOURCE_DELAY_MS = Number(process.env.FATHOM_SOURCE_DELAY_MS || 1200);
-const INTERNAL_DOMAIN = "joinaceleratalent.com";
 const ONLY_SOURCE = (
   process.env.FATHOM_ONLY_SOURCE ||
   process.argv.find((arg) => arg.startsWith("--source="))?.split("=")[1] ||
   ""
 ).trim().toLowerCase();
 
-// fathom.video: la propia cuenta de Fathom aparece como invitado en llamadas
-// demo internas ("Fathom Demo", 2021) presentes en el historial de las
-// cuentas de origen. No son clientes ni coaches — sin este filtro, cada
-// corrida del import las vuelve a crear como cliente fantasma aunque se
-// borren a mano (ver "Susannah Durant").
-const EXCLUDED_EMAIL_DOMAINS = ["fathom.video"];
-// Correos de agenda/genéricos que Fathom a veces mete como invitado junto al
-// cliente real. Nunca pertenecen a la lista maestra y no deben asociar una
-// llamada a un cliente.
-const EXCLUDED_EMAILS = [
-  "mari.aceleratalent@gmail.com",
-  "rlconsultalent@gmail.com",
-  "rosa.aceleratalent@gmail.com",
-  "alex.vega@cmglobalconsulting.com",
-  "jonathan.aceleratalent@gmail.com",
-];
-const DEMO_TITLE_PATTERN = /^fathom demo$/i;
-
 const MASTER_CLIENTS = JSON.parse(
   fs.readFileSync(new URL("../data/master-clients.json", import.meta.url), "utf8"),
 );
+const DEMO_TITLE_PATTERN = /^fathom demo$/i;
 
 loadEnv(".env.local");
 
@@ -163,16 +147,6 @@ function externalInvitees(meeting) {
     );
 }
 
-function normalizeIdentity(value) {
-  return cleanText(value)
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim()
-    .replace(/\s+/g, " ");
-}
-
 function addThreeMonths(startDate) {
   const [year, month, day] = startDate.split("-").map(Number);
   return new Date(Date.UTC(year, month + 2, day)).toISOString().slice(0, 10);
@@ -253,12 +227,15 @@ async function allRows(path, order = "id") {
 }
 
 async function readCoaches() {
-  const rows = await sb("coaches?select=id,email,full_name,fathom_source_key");
-  return new Map(rows.map((coach) => [coach.fathom_source_key, coach]));
+  return allRows("coaches?select=id,email,full_name,fathom_source_key,alternate_emails");
 }
 
-async function readMasterClients() {
-  const rows = await allRows("clients?select=id,email,full_name,context_summary,start_date,end_date,status");
+async function readClients() {
+  return allRows("clients?select=id,email,full_name,alternate_emails,context_summary,start_date,end_date,status");
+}
+
+// Lista maestra: solo para las fechas de programa (el vínculo de llamadas usa todos los clientes).
+function readMasterClients(rows) {
   const byName = new Map(rows.map((client) => [normalizeIdentity(client.full_name), client]));
   const byEmail = new Map(rows.filter((client) => client.email).map((client) => [client.email.toLowerCase(), client]));
   const masterClients = new Map();
@@ -275,8 +252,19 @@ async function readMasterClients() {
   return masterClients;
 }
 
-function clientForMeeting(meeting, masterClients) {
-  return matchMeetingClient({ ...meeting, external_invitees: externalInvitees(meeting) }, MASTER_CLIENTS, masterClients);
+// Coach del cliente: el principal, o el único asignado. Solo respaldo para llamadas sin quién-grabó.
+async function readAssignedCoaches() {
+  const rows = await allRows("coach_client_assignments?select=client_id,coach_id,is_primary", "client_id");
+  const byClient = new Map();
+  for (const row of rows) byClient.set(row.client_id, [...(byClient.get(row.client_id) ?? []), row]);
+  return (clientId) => {
+    const assignments = byClient.get(clientId) ?? [];
+    return (assignments.find((a) => a.is_primary) ?? (assignments.length === 1 ? assignments[0] : null))?.coach_id ?? null;
+  };
+}
+
+function clientForMeeting(meeting, clients) {
+  return matchClient({ invitees: externalInvitees(meeting), title: meeting.meeting_title || meeting.title }, clients);
 }
 
 async function upsertCall(row, knownCalls) {
@@ -292,12 +280,21 @@ async function upsertCall(row, knownCalls) {
   payload.raw_metadata = { ...existing?.raw_metadata, ...row.raw_metadata };
   if (existing?.client_id) {
     delete payload.client_id;
+    delete payload.client_match_method;
     payload.raw_metadata.client_match_reason = "preserved_existing";
   }
   if (existing?.coach_id) {
-    delete payload.coach_id;
+    // El coach solo se corrige con un dato fiable (quién grabó) y nunca si se fijó a mano.
+    const reliable = payload.coach_resolution === "recorded_by" && existing.coach_resolution !== "manual";
+    if (!reliable) {
+      delete payload.coach_id;
+      delete payload.coach_resolution;
+      delete payload.coach_needs_confirmation;
+    }
     if (existing.raw_metadata?.source_key) payload.raw_metadata.source_key = existing.raw_metadata.source_key;
   }
+  // Un share_url vacío nunca borra uno ya guardado.
+  if (!payload.share_url) delete payload.share_url;
   if (cleanText(existing?.summary)) delete payload.summary;
   if (cleanText(existing?.next_steps)) delete payload.next_steps;
 
@@ -307,7 +304,10 @@ async function upsertCall(row, knownCalls) {
     body: JSON.stringify(payload),
   });
   const saved = rows[0] || null;
-  if (saved) knownCalls.set(row.fathom_call_id, saved);
+  if (saved) {
+    knownCalls.set(row.fathom_call_id, saved);
+    return { ...saved, previousCoachId: existing?.coach_id ?? null };
+  }
   return saved;
 }
 
@@ -329,6 +329,19 @@ async function upsertParticipants(callId, meeting) {
     method: "POST",
     headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
     body: JSON.stringify(participants),
+  });
+}
+
+// Cuando el vínculo fue por nombre, el email nuevo del invitado queda como alterno
+// para que la próxima vez se vincule directo por email.
+async function learnAlternateEmail(client, email) {
+  const alternates = client.alternate_emails ?? [];
+  if (alternates.includes(email)) return;
+  client.alternate_emails = [...alternates, email];
+  await sb(`clients?id=eq.${encodeURIComponent(client.id)}`, {
+    method: "PATCH",
+    headers: { Prefer: "return=minimal" },
+    body: JSON.stringify({ alternate_emails: client.alternate_emails }),
   });
 }
 
@@ -403,9 +416,12 @@ async function refreshProgramDates(masterClients) {
 }
 
 async function main() {
-  const coaches = await readCoaches();
-  const masterClients = await readMasterClients();
-  const knownCalls = new Map((await allRows("calls?select=id,fathom_call_id,client_id,coach_id,summary,next_steps,raw_metadata")).map(call => [call.fathom_call_id, call]));
+  const coachList = await readCoaches();
+  const coaches = new Map(coachList.map((coach) => [coach.fathom_source_key, coach]));
+  const clients = await readClients();
+  const masterClients = readMasterClients(clients);
+  const assignedCoachFor = await readAssignedCoaches();
+  const knownCalls = new Map((await allRows("calls?select=id,fathom_call_id,client_id,coach_id,coach_resolution,summary,next_steps,raw_metadata")).map(call => [call.fathom_call_id, call]));
   const seenIds = new Set();
   const stats = {
     meetings: 0,
@@ -438,9 +454,16 @@ async function main() {
       }
 
       if (!meeting.recording_id) throw new Error(`Fathom ${source.key}: meeting without recording_id.`);
-      const matched = clientForMeeting(meeting, masterClients);
+      const matched = clientForMeeting(meeting, clients);
       const client = matched.client;
-      if (matched.reason === "ambiguous") stats.ambiguous += 1;
+      if (matched.reason.startsWith("ambiguous")) stats.ambiguous += 1;
+      // El coach es quien grabó la llamada; si no se sabe, el coach del cliente (y se marca por confirmar).
+      const attribution = resolveCallCoach({
+        recordedByEmail: meeting.recorded_by?.email,
+        coaches: coachList,
+        assignedCoachId: client ? assignedCoachFor(client.id) : null,
+        sourceCoachId: coach?.id,
+      });
       if (!knownCalls.has(String(meeting.recording_id))) {
         if (!seenIds.has(String(meeting.recording_id))) stats.missing += 1;
         sourceMissing += 1;
@@ -455,7 +478,10 @@ async function main() {
 
       const row = {
         client_id: client?.id ?? null,
-        coach_id: coach?.id || null,
+        client_match_method: matched.method,
+        coach_id: attribution.coachId,
+        coach_resolution: attribution.resolution,
+        coach_needs_confirmation: attribution.needsConfirmation,
         source: "fathom",
         fathom_call_id: String(meeting.recording_id),
         title: cleanText(meeting.meeting_title || meeting.title) || "Llamada Fathom",
@@ -490,6 +516,16 @@ async function main() {
         // equivocado.
         const finalClientId = savedCall?.client_id ?? row.client_id;
         const finalCoachId = savedCall?.coach_id ?? row.coach_id;
+        if (client && matched.method === "name" && matched.learnEmail && finalClientId === client.id) {
+          await learnAlternateEmail(client, matched.learnEmail);
+        }
+        if (savedCall && finalCoachId !== savedCall.previousCoachId && savedCall.previousCoachId) {
+          await sb(`coach_fees?call_id=eq.${encodeURIComponent(savedCall.id)}`, {
+            method: "PATCH",
+            headers: { Prefer: "return=minimal" },
+            body: JSON.stringify({ coach_id: finalCoachId }),
+          });
+        }
         if (finalCoachId && finalClientId) {
           await ensureAssignment(finalCoachId, finalClientId);
           stats.assignments += 1;

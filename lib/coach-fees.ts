@@ -10,8 +10,20 @@ export interface FeeRow {
   amount: number | null;
   payment_type: string | null;
   paid_on: string | null;
+  /** Link público de compartir (share_url); nunca el link interno de Fathom. */
   recording_url: string | null;
+  client_match_method: 'email' | 'alt_email' | 'name' | 'manual' | null;
+  /** Coach asignado al cliente, solo cuando es distinto del coach que hizo la llamada. */
+  client_coach_name: string | null;
+  coach_needs_confirmation: boolean;
 }
+
+export const MATCH_METHOD_LABELS = {
+  email: 'Vinculado por email',
+  alt_email: 'Vinculado por email alterno',
+  name: 'Vinculado por nombre',
+  manual: 'Vinculado manualmente',
+} as const;
 
 export const CALL_HOURLY_RATE = 100_000;
 

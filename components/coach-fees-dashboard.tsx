@@ -5,15 +5,16 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, ChevronRight, Download, ExternalLink, Pencil, Plus, Search, X } from 'lucide-react';
 import { saveFee } from '@/app/admin/fees/actions';
-import { CALL_HOURLY_RATE, currentMonth, feeDate, money, monthBounds, PAYMENT_TYPES, safeRecordingUrl, type FeeRow } from '@/lib/coach-fees';
+import { CALL_HOURLY_RATE, currentMonth, feeDate, money, monthBounds, MATCH_METHOD_LABELS, PAYMENT_TYPES, safeRecordingUrl, type FeeRow } from '@/lib/coach-fees';
 
 type Option = { id: string; name: string };
 const field = 'h-11 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground outline-none focus:border-accent focus:ring-2 focus:ring-accent/20';
 const iconButton = 'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition hover:bg-surface-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent';
+const normalize = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es');
 const number = (value: number) => new Intl.NumberFormat('es-CO', { maximumFractionDigits: 2 }).format(value);
 
-export function CoachFeesDashboard({ coaches, coachId, month, rows, clients, readOnly = false, basePath, clientBasePath }: {
-  coaches: Option[]; coachId: string; month: string; rows: FeeRow[]; clients: Option[]; readOnly?: boolean; basePath?: string; clientBasePath?: string;
+export function CoachFeesDashboard({ coaches, coachId, month, rows, clients, allClients, readOnly = false, basePath, clientBasePath }: {
+  coaches: Option[]; coachId: string; month: string; rows: FeeRow[]; clients: Option[]; allClients?: Option[]; readOnly?: boolean; basePath?: string; clientBasePath?: string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -55,7 +56,7 @@ export function CoachFeesDashboard({ coaches, coachId, month, rows, clients, rea
       <div><p className="mb-1 text-sm font-medium text-accent">{readOnly ? coachName : 'Administración'}</p><h1 className="text-2xl font-semibold">{readOnly ? 'Mis llamadas' : 'Llamadas de coaches'}</h1></div>
       <div className="flex gap-2">
         <button onClick={exportCsv} disabled={!filtered.length || pending} className={`${iconButton} disabled:opacity-40`} title="Exportar CSV" aria-label="Exportar CSV"><Download size={18} /></button>
-        {!readOnly && <button disabled={pending} onClick={() => setEditing({ id: null, call_id: null, coach_id: coachId, client_id: null, client_name: '', service_date: month === currentMonth() ? new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()) : monthBounds(month).from, topic: '', hours: null, amount: null, payment_type: null, paid_on: null, recording_url: null })} className="inline-flex min-h-11 items-center gap-2 rounded-md bg-accent px-4 text-sm font-medium text-white transition hover:bg-accent-hover disabled:opacity-40"><Plus size={18} />Registrar actividad</button>}
+        {!readOnly && <button disabled={pending} onClick={() => setEditing({ id: null, call_id: null, coach_id: coachId, client_id: null, client_name: '', service_date: month === currentMonth() ? new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()) : monthBounds(month).from, topic: '', hours: null, amount: null, payment_type: null, paid_on: null, recording_url: null, client_match_method: null, client_coach_name: null, coach_needs_confirmation: false })} className="inline-flex min-h-11 items-center gap-2 rounded-md bg-accent px-4 text-sm font-medium text-white transition hover:bg-accent-hover disabled:opacity-40"><Plus size={18} />Registrar actividad</button>}
       </div>
     </div>
 
@@ -95,14 +96,14 @@ export function CoachFeesDashboard({ coaches, coachId, month, rows, clients, rea
         <tbody className="divide-y divide-border">
           {filtered.map(r => <tr key={r.call_id ?? r.id} className="even:bg-background/70 hover:bg-accent-soft/40">
             <td className="whitespace-nowrap px-4 py-3.5 tabular-nums">{feeDate(r.service_date)}</td>
-            <td className="max-w-52 px-4 py-3.5 font-medium">{r.client_id ? <Link href={`${clientBasePath ?? `/${readOnly ? 'coach' : 'admin'}/clients`}/${r.client_id}`} className="hover:text-accent hover:underline">{r.client_name}</Link> : <span className="text-muted">{r.client_name}</span>}</td>
-            <td className="min-w-48 max-w-80 px-4 py-3.5"><span className="line-clamp-2" title={r.topic}>{r.topic}</span>{!r.call_id && <span className="mt-1 block text-xs text-muted">Actividad manual</span>}</td>
+            <td className="max-w-52 px-4 py-3.5 font-medium">{r.client_id ? <Link href={`${clientBasePath ?? `/${readOnly ? 'coach' : 'admin'}/clients`}/${r.client_id}`} title={r.client_match_method ? MATCH_METHOD_LABELS[r.client_match_method] : undefined} className="hover:text-accent hover:underline">{r.client_name}</Link> : <span className="text-muted">{r.client_name}</span>}{r.client_coach_name && <span className="mt-0.5 block text-xs font-normal text-muted">Cliente de {r.client_coach_name}</span>}</td>
+            <td className="min-w-48 max-w-80 px-4 py-3.5"><span className="line-clamp-2" title={r.topic}>{r.topic}</span>{!r.call_id && <span className="mt-1 block text-xs text-muted">Actividad manual</span>}{r.coach_needs_confirmation && <span className="mt-1 block text-xs font-medium text-[var(--status-extension)]">Coach por confirmar</span>}</td>
             <td className="px-4 py-3.5 text-right tabular-nums">{r.hours === null ? '—' : number(r.hours)}</td>
             <td className="whitespace-nowrap px-4 py-3.5 text-right font-medium tabular-nums">{r.amount === null ? '—' : money(r.amount)}</td>
             <td className="px-4 py-3.5 text-muted">{PAYMENT_TYPES.find(p => p.value === r.payment_type)?.label ?? '—'}</td>
             <td className="whitespace-nowrap px-4 py-3.5">{r.paid_on ? feeDate(r.paid_on) : '—'}</td>
             <td className="px-4 py-3.5"><span className={`whitespace-nowrap rounded px-2 py-1 text-xs font-medium ${r.paid_on ? 'bg-[var(--status-active-bg)] text-[var(--status-active)]' : r.amount === null ? 'bg-surface-muted text-muted' : 'bg-[var(--status-extension-bg)] text-[var(--status-extension)]'}`}>{r.paid_on ? 'Pagado' : r.amount === null ? 'Por valorar' : 'Pendiente'}</span></td>
-            <td className="px-4 py-2">{r.recording_url && safeRecordingUrl(r.recording_url) ? <a href={r.recording_url} target="_blank" rel="noopener noreferrer" aria-label={`Ver grabación de ${r.client_name} del ${feeDate(r.service_date)}`} className="inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap text-accent hover:underline">Ver grabación<ExternalLink size={14} /></a> : <span className="text-muted">Sin grabación</span>}</td>
+            <td className="px-4 py-2">{r.recording_url && safeRecordingUrl(r.recording_url) ? <a href={r.recording_url} target="_blank" rel="noopener noreferrer" aria-label={`Ver grabación de ${r.client_name} del ${feeDate(r.service_date)}`} className="inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap text-accent hover:underline">Ver grabación<ExternalLink size={14} /></a> : <span className="text-muted">Grabación no disponible</span>}</td>
             {!readOnly && <td className="px-3 py-2"><button className={iconButton} title="Editar actividad" aria-label={`Editar ${r.topic} de ${r.client_name}`} onClick={() => setEditing(r)} disabled={pending}><Pencil size={16} /></button></td>}
           </tr>)}
           {!filtered.length && <tr><td colSpan={readOnly ? 9 : 10} className="px-6 py-16 text-center text-muted">{rows.length ? 'No hay actividades con estos filtros.' : 'No hay actividades registradas en este periodo.'}</td></tr>}
@@ -111,17 +112,18 @@ export function CoachFeesDashboard({ coaches, coachId, month, rows, clients, rea
       </table>
     </div>
     <p className="mt-3 text-xs text-muted" role="status">{pending ? 'Cargando periodo…' : `${filtered.length} de ${rows.length} actividades`}</p>
-    {!readOnly && editing && <FeeEditor key={editing.call_id ?? editing.id ?? 'new'} row={editing} clients={clients} onClose={() => setEditing(null)} />}
+    {!readOnly && editing && <FeeEditor key={editing.call_id ?? editing.id ?? 'new'} row={editing} clients={allClients ?? clients} coaches={coaches} onClose={() => setEditing(null)} />}
   </div>;
 }
 
-function FeeEditor({ row, clients, onClose }: { row: FeeRow; clients: Option[]; onClose: () => void }) {
+function FeeEditor({ row, clients, coaches, onClose }: { row: FeeRow; clients: Option[]; coaches: Option[]; onClose: () => void }) {
+  const [clientQuery, setClientQuery] = useState('');
   const dialog = useRef<HTMLDialogElement>(null);
   const [state, action, pending] = useActionState(saveFee, { error: null, success: false });
   const [draft, setDraft] = useState({
     serviceDate: row.service_date, clientId: row.client_id ?? '', topic: row.topic,
     hours: row.hours === null ? '' : String(row.hours), amount: row.amount === null ? '' : String(row.amount),
-    paymentType: row.payment_type ?? '', paidOn: row.paid_on ?? '',
+    paymentType: row.payment_type ?? '', paidOn: row.paid_on ?? '', callCoachId: row.coach_id,
   });
   function change(key: keyof typeof draft, value: string) {
     setDraft(current => ({ ...current, [key]: value,
@@ -136,7 +138,9 @@ function FeeEditor({ row, clients, onClose }: { row: FeeRow; clients: Option[]; 
       <input type="hidden" name="id" value={row.id ?? ''} /><input type="hidden" name="callId" value={row.call_id ?? ''} /><input type="hidden" name="coachId" value={row.coach_id} />
       <fieldset disabled={pending} className="grid gap-4 sm:grid-cols-2">
         <label className="text-sm">Fecha<input name="serviceDate" type="date" required value={draft.serviceDate} onChange={e => change('serviceDate', e.target.value)} className={`${field} mt-1.5`} /></label>
-        <label className="text-sm">Cliente<select aria-label="Cliente" name="clientId" value={draft.clientId} onChange={e => change('clientId', e.target.value)} className={`${field} mt-1.5`}><option value="">Sin cliente vinculado</option>{clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+        <div className="text-sm"><label>Cliente<input type="search" aria-label="Buscar cliente" placeholder="Buscar cliente…" value={clientQuery} onChange={e => setClientQuery(e.target.value)} className={`${field} mt-1.5`} /></label>
+          <select aria-label="Cliente" name="clientId" value={draft.clientId} onChange={e => change('clientId', e.target.value)} className={`${field} mt-2`}><option value="">Sin cliente vinculado</option>{clients.filter(c => c.id === draft.clientId || normalize(c.name).includes(normalize(clientQuery))).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+        {row.call_id && <label className="text-sm">Coach de la llamada<select aria-label="Coach de la llamada" name="callCoachId" value={draft.callCoachId} onChange={e => change('callCoachId', e.target.value)} className={`${field} mt-1.5`}>{coaches.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>}
         <label className="text-sm sm:col-span-2">Tema trabajado<input name="topic" required maxLength={500} value={draft.topic} onChange={e => change('topic', e.target.value)} className={`${field} mt-1.5`} /></label>
         <label className="text-sm">Número de horas<input name="hours" type="number" min="0.01" max="9999" step="0.01" value={draft.hours} onChange={e => change('hours', e.target.value)} className={`${field} mt-1.5`} /></label>
         <label className="text-sm">Valor (COP)<input name="amount" type="number" min="0" max="999999999999" step="0.01" value={draft.amount} onChange={e => change('amount', e.target.value)} className={`${field} mt-1.5`} /></label>

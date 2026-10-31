@@ -8,6 +8,7 @@ import { TopicChips } from "@/components/client-detail/topic-chips";
 import { AgreementsList } from "@/components/client-detail/agreements-list";
 import { displayCallTitle } from "@/lib/call-title";
 import { formatDate, formatTime, formatDuration } from "@/lib/format";
+import { publicRecordingUrl } from "@/lib/recording-link";
 import { parseSummaryMarkdown, buildRemainingMarkdown } from "@/lib/call-summary";
 
 const PARTICIPANT_ROLE_LABELS: Record<string, string> = {
@@ -67,8 +68,8 @@ export function CallReader({
               <Play size={14} strokeWidth={2} aria-hidden="true" /> Ver grabación
             </a>
           )}
-          {call.share_url && (
-            <a href={call.share_url} target="_blank" rel="noreferrer" className={pillButton}>
+          {publicRecordingUrl(call) && (
+            <a href={publicRecordingUrl(call)!} target="_blank" rel="noreferrer" className={pillButton}>
               Abrir en Fathom <ExternalLink size={14} strokeWidth={2} aria-hidden="true" />
             </a>
           )}

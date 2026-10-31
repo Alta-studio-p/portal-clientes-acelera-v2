@@ -26,6 +26,7 @@ for(const audit of [false,true]){
   if(table==='coaches')return Response.json([{id:'source-coach',fathom_source_key:'ross'}]);
   if(table==='clients')return Response.json([client]);
   if(table==='calls')return Response.json([original]);
+  if(table==='coach_client_assignments')return Response.json([]);
   throw Error('Unexpected request');
  };
  await import(${JSON.stringify(script)});
