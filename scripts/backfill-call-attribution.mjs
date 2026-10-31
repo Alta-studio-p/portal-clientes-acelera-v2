@@ -2,11 +2,12 @@
 //   node --env-file=.env.local scripts/backfill-call-attribution.mjs [--month=2026-10] [--skip-fathom] [--apply]
 // Sin --apply solo lee y muestra lo que cambiaría. Nunca borra llamadas ni toca
 // valores, estados ni fechas de pago; solo actualiza campos de atribución.
+import fs from 'node:fs';
 import { createSqlClient } from '../lib/postgres.mjs';
 import { matchClient, clientInvitees } from '../lib/client-matching.mjs';
 import { resolveCallCoach, sessionKey } from '../lib/coach-attribution.mjs';
 import { fathomSourcesFromEnv, listMeetingsLight } from '../lib/fathom-api.mjs';
-import { fetchCallSpeakers, speakingCoachEmails } from '../lib/call-speakers.mjs';
+import { fetchCallSpeakers, isInternalCall, summarizeSpeakers } from '../lib/call-speakers.mjs';
 
 const APPLY = process.argv.includes('--apply');
 const SKIP_FATHOM = process.argv.includes('--skip-fathom');
@@ -114,31 +115,45 @@ try {
   }
   if (!monthUnlinked.length) console.log('   (ninguna)');
 
-  // 3. Coach: quien grabó la llamada.
+  // 3. Coach: quien grabó la llamada; la coach principal solo cede si un coach que cobra habla en la transcripción.
+  //    Las llamadas internas (sin cliente y solo coaches hablando) no se pagan nunca: quedan en la coach principal.
   const inMonth = calls.filter(c => c.local_date?.startsWith(MONTH) && c.coach_resolution !== 'manual');
-  // Encuentros que el propio coach (que cobra por llamada) ya grabó: la copia de Caro no se atribuye.
   const billingEmails = new Map(coaches.filter(c => c.bills_by_call).flatMap(c => [c.email, ...(c.alternate_emails ?? [])].map(e => [String(e).toLowerCase(), c.id])));
   const ownRecordings = new Set(calls.filter(c => billingEmails.has(String(c.raw_metadata?.recorded_by?.email ?? '').toLowerCase())).map(c => sessionKey(c.local_date, c.title)));
-  const changes = [], flagged = [], unknownRecorders = new Map();
+  const principal = coaches.find(c => c.bills_by_call === false);
+  const plan = [], flagged = [], unknownRecorders = new Map();
   for (const call of inMonth) {
     const recordedByEmail = call.raw_metadata?.recorded_by?.email ?? null;
-    // Grabó la cuenta que no cobra por llamada: quién habló en la transcripción pública (se guarda en raw_metadata).
-    let speakerEmails = call.raw_metadata?.speaking_coach_emails;
     const recorderCoach = coaches.find(c => [c.email, ...(c.alternate_emails ?? [])].map(e => String(e).toLowerCase()).includes(String(recordedByEmail ?? '').toLowerCase()));
-    if (!speakerEmails && recorderCoach && !recorderCoach.bills_by_call && call.client_id && call.share_url) {
+    let info = call.raw_metadata?.speaker_summary, metaUpdate = null;
+    if (!info && call.share_url && (!call.client_id || (recorderCoach && !recorderCoach.bills_by_call))) {
       const speakers = await fetchCallSpeakers(call.share_url);
-      if (speakers) { speakerEmails = speakingCoachEmails(speakers); await write(`update public.calls set raw_metadata = coalesce(raw_metadata, '{}'::jsonb) || $2::jsonb where id = $1::uuid`, [call.id, JSON.stringify({ speaking_coach_emails: speakerEmails })]); }
+      if (speakers) { info = summarizeSpeakers(speakers); metaUpdate = { speaker_summary: info }; }
     }
-    const outcome = resolveCallCoach({ recordedByEmail, coaches, speakerEmails: speakerEmails ?? [],
+    let outcome, internal = false;
+    if (!call.client_id && principal && isInternalCall(info)) { outcome = { coachId: principal.id, resolution: 'recorded_by', needsConfirmation: false }; internal = true; }
+    else outcome = resolveCallCoach({ recordedByEmail, coaches, speakerEmails: info?.coachEmails ?? [],
       hasOwnRecording: ownRecordings.has(sessionKey(call.local_date, call.title)) && !billingEmails.has(String(recordedByEmail ?? '').toLowerCase()), keepCoachId: call.coach_id, assignedCoachId: call.client_id ? assignedCoach(call.client_id) : null });
     if (outcome.resolution === 'fallback' && recordedByEmail) unknownRecorders.set(recordedByEmail, (unknownRecorders.get(recordedByEmail) ?? 0) + 1);
-    await write(`update public.calls set coach_id = $2::uuid, coach_resolution = $3, coach_needs_confirmation = $4 where id = $1::uuid`, [call.id, outcome.coachId, outcome.resolution, outcome.needsConfirmation]);
     if (outcome.needsConfirmation) flagged.push(call);
-    if (outcome.coachId && outcome.coachId !== call.coach_id) {
-      const fee = feeByCall.get(call.id);
-      await write(`update public.coach_fees set coach_id = $2::uuid, updated_at = now() where call_id = $1::uuid`, [call.id, outcome.coachId]);
-      changes.push({ fecha: call.local_date, llamada: call.title, cliente: call.client_id ? clientName(call.client_id) : 'Sin cliente', de: coachName(call.coach_id), a: coachName(outcome.coachId), 'honorario ya pagado': fee?.paid_on ? `sí (${fee.paid_on})` : 'no' });
-    }
+    plan.push({ call, outcome, internal, metaUpdate: internal ? { ...metaUpdate, internal_call: true } : metaUpdate });
+  }
+  const changed = plan.filter(x => (x.outcome.coachId && x.outcome.coachId !== x.call.coach_id) || x.outcome.resolution !== x.call.coach_resolution);
+  const changes = plan.filter(x => x.outcome.coachId && x.outcome.coachId !== x.call.coach_id).map(({ call, outcome, internal }) => ({
+    fecha: call.local_date, llamada: call.title, cliente: call.client_id ? clientName(call.client_id) : 'Sin cliente', de: coachName(call.coach_id), a: coachName(outcome.coachId),
+    motivo: internal ? 'interna (sin cliente): no se paga' : outcome.resolution, 'honorario ya pagado': feeByCall.get(call.id)?.paid_on ? `sí (${feeByCall.get(call.id).paid_on})` : 'no' }));
+  if (APPLY && changed.length) {
+    // Respaldo antes de escribir: estado anterior de cada llamada que cambia.
+    const dir = new URL('../backups/', import.meta.url); fs.mkdirSync(dir, { recursive: true });
+    const file = new URL(`llamadas-antes-correccion-${new Date().toISOString().slice(0, 10)}-${Date.now()}.csv`, dir);
+    const cols = ['id', 'fathom_call_id', 'local_date', 'title', 'client_id', 'coach_id_anterior', 'coach_resolution_anterior', 'coach_id_nuevo', 'coach_resolution_nuevo'];
+    const q = v => `"${String(v ?? '').replaceAll('"', '""')}"`;
+    fs.writeFileSync(file, '\uFEFF' + [cols.join(','), ...changed.map(({ call, outcome }) => [call.id, call.fathom_call_id, call.local_date, call.title, call.client_id, call.coach_id, call.coach_resolution, outcome.coachId, outcome.resolution].map(q).join(','))].join('\n'));
+    console.log(`Respaldo: ${changed.length} filas → backups/${file.pathname.split('/').pop()}`);
+  }
+  for (const { call, outcome, metaUpdate } of plan) {
+    await write(`update public.calls set coach_id = $2::uuid, coach_resolution = $3, coach_needs_confirmation = $4, raw_metadata = coalesce(raw_metadata, '{}'::jsonb) || $5::jsonb where id = $1::uuid`, [call.id, outcome.coachId, outcome.resolution, outcome.needsConfirmation, JSON.stringify(metaUpdate ?? {})]);
+    if (outcome.coachId && outcome.coachId !== call.coach_id) await write(`update public.coach_fees set coach_id = $2::uuid, updated_at = now() where call_id = $1::uuid`, [call.id, outcome.coachId]);
   }
   console.log(`\n[3] Llamadas de ${MONTH} revisadas: ${inMonth.length} · cambian de coach: ${changes.length} · "Coach por confirmar": ${flagged.length}`);
   if (changes.length) console.table(changes);

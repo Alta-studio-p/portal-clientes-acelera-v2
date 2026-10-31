@@ -2,7 +2,7 @@ import fs from "node:fs";
 import { matchClient, INTERNAL_DOMAIN, IGNORED_EMAIL_DOMAINS as EXCLUDED_EMAIL_DOMAINS, IGNORED_EMAILS as EXCLUDED_EMAILS } from "../lib/client-matching.mjs";
 import { normalizeIdentity } from "../lib/client-matching.mjs";
 import { resolveCallCoach, sessionKey } from "../lib/coach-attribution.mjs";
-import { fetchCallSpeakers, speakingCoachEmails } from "../lib/call-speakers.mjs";
+import { fetchCallSpeakers, isInternalCall, speakingCoachEmails, summarizeSpeakers } from "../lib/call-speakers.mjs";
 import { contextFromCall } from "../lib/call-context.mjs";
 
 const APPLY = process.argv.includes("--apply") && process.env.FATHOM_AUDIT_ONLY !== "true";
@@ -480,10 +480,14 @@ async function main() {
       };
       let attribution = resolveCallCoach(attributionInput);
       // Grabó la cuenta que no cobra por llamada: se lee quién habló en la transcripción pública.
-      let speakers = null;
-      if (!billsByCall(source) && client && meeting.share_url) {
-        speakers = await fetchCallSpeakers(meeting.share_url);
-        attribution = resolveCallCoach({ ...attributionInput, speakerEmails: speakingCoachEmails(speakers) });
+      let speakers = null, internalCall = false;
+      if (meeting.share_url && ((!billsByCall(source) && client) || !client)) speakers = await fetchCallSpeakers(meeting.share_url);
+      if (speakers && !billsByCall(source) && client) attribution = resolveCallCoach({ ...attributionInput, speakerEmails: speakingCoachEmails(speakers) });
+      // Sin cliente y solo coaches hablando = llamada interna: nunca se paga, queda en la coach principal.
+      const principalCoach = coachList.find((c) => c.bills_by_call === false);
+      if (!client && principalCoach && isInternalCall(speakers && summarizeSpeakers(speakers))) {
+        attribution = { coachId: principalCoach.id, resolution: "recorded_by", needsConfirmation: false };
+        internalCall = true;
       }
       if (!knownCalls.has(String(meeting.recording_id))) {
         if (!seenIds.has(String(meeting.recording_id))) stats.missing += 1;
@@ -523,7 +527,8 @@ async function main() {
           recording_end_time: meeting.recording_end_time,
           external_invitees: externalInvitees(meeting),
           recorded_by: meeting.recorded_by ?? null,
-          speaking_coach_emails: speakers ? speakingCoachEmails(speakers) : undefined,
+          speaker_summary: speakers ? summarizeSpeakers(speakers) : undefined,
+          internal_call: internalCall || undefined,
           client_match_reason: matched.reason,
         },
       };
