@@ -10,7 +10,12 @@ export function validProgressDate(value: string) {
 export interface ProgressClient {
   id: string; name: string; email: string; startDate: string | null; lastCall: string | null;
   calls: number; coaches: string[]; coachIds: string[]; categoryIds: string[]; operationalStatus: string;
+  /** Posición en la hoja de ingresos (1 = el primero que entró). */
+  entryOrder: number | null; endDate: string | null;
+  /** Coach principal (coach_client_assignments.is_primary) y coaches secundarios, calculados desde las llamadas. */
+  primaryCoach: string | null; primaryCoachId: string | null; alsoCoaches: string[]; alsoCoachIds: string[];
 }
+export interface ProgressCoach { id: string; name: string; isSupport: boolean }
 export interface ProgressCategory { id: string; label: string; active: boolean }
 
 export function progressEndDate(start: string | null): string | null {

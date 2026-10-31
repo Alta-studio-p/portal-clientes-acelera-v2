@@ -44,3 +44,6 @@ next-env.d.ts
 
 # Respaldos de datos de clientes antes de correcciones
 backups/
+
+# Hoja de ingresos: trae cédulas y teléfonos, nunca se sube
+ingresos-2026.csv

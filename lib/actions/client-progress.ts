@@ -52,7 +52,8 @@ export async function saveProgressClient(_previous: ProgressState, form: FormDat
   const id = String(form.get('clientId') ?? '');
   const field = String(form.get('field') ?? '');
   const value = String(form.get('value') ?? '').trim();
-  if (!uuid.test(id) || !['start','category'].includes(field)) return { error: 'Cliente o campo inválido.', success: false };
+  if (!uuid.test(id) || !['start','category','primary'].includes(field)) return { error: 'Cliente o campo inválido.', success: false };
+  if (field === 'primary' && (session.profile.role !== 'admin' || !uuid.test(value))) return { error: 'Solo un administrador puede cambiar el coach principal.', success: false };
   if (field === 'start' && !validProgressDate(value)) return { error: 'Selecciona una fecha de inicio válida.', success: false };
   if (field === 'category' && value && !uuid.test(value)) return { error: 'Estado inválido.', success: false };
   const sql = getSql();
@@ -68,6 +69,17 @@ export async function saveProgressClient(_previous: ProgressState, form: FormDat
       if (!rows.length) throw new Error('denied');
       if (field === 'start') {
         await tx`update public.clients set start_date=${value}::date, updated_at=now() where id=${id}::uuid`;
+      } else if (field === 'primary') {
+        const [coach] = await tx`select id, is_support_coach from public.coaches where id=${value}::uuid`;
+        if (!coach) throw new Error('coach');
+        // La coach de apoyo no puede ser principal de un cliente con coach de trabajo (la base descartaría el cambio y se perdería el principal actual).
+        if (coach.is_support_coach) {
+          const [working] = await tx`select 1 from public.coach_client_assignments a join public.coaches c on c.id=a.coach_id where a.client_id=${id}::uuid and not c.is_support_coach limit 1`;
+          if (working) throw new Error('support');
+        }
+        await tx`update public.coach_client_assignments set is_primary=false where client_id=${id}::uuid and is_primary`;
+        await tx`insert into public.coach_client_assignments (coach_id, client_id, is_primary) values (${value}::uuid, ${id}::uuid, true)
+          on conflict (coach_id, client_id) do update set is_primary=true`;
       } else {
         if (value) {
           const category = await tx`select id from public.client_progress_categories where id=${value}::uuid and active=true for share`;

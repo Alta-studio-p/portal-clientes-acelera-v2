@@ -5,7 +5,7 @@ import { useActionState, useMemo, useState } from 'react';
 import { Pencil, Save, TriangleAlert, Search, X } from 'lucide-react';
 import { saveProgressClient, type ProgressState } from '@/lib/actions/client-progress';
 import { ClientStateSelector } from '@/components/client-state-selector';
-import { sessionProgress, SESSION_LIMIT, progressEndDate, formatProgressDate as formatDate, type ProgressClient, type ProgressCategory } from '@/lib/client-progress';
+import { sessionProgress, SESSION_LIMIT, progressEndDate, formatProgressDate as formatDate, type ProgressClient, type ProgressCategory, type ProgressCoach } from '@/lib/client-progress';
 
 const initial: ProgressState = { error: null, success: false };
 const control = 'min-h-10 rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-accent focus:ring-2 focus:ring-accent/20';
@@ -29,26 +29,48 @@ function RowEditor({ client }: { client: ProgressClient }) {
   </details>;
 }
 
-export function ClientProgressDashboard({ clients, categories, isAdmin, basePath = '/admin', readOnly = false, initialCoach = '', initialSearch = '' }: {
-  clients: ProgressClient[]; categories: ProgressCategory[]; isAdmin: boolean; basePath?: string; readOnly?: boolean; initialCoach?: string; initialSearch?: string;
+function PrimaryCoachEditor({ client, coaches, supportIds, readOnly }: { client: ProgressClient; coaches: [string, string][]; supportIds: Set<string>; readOnly: boolean }) {
+  const [state, action, pending] = useActionState(saveProgressClient, initial);
+  const name = client.primaryCoach || 'Sin coach';
+  const options = coaches.filter(([id]) => !supportIds.has(id) || id === client.primaryCoachId);
+  if (readOnly) return <span>{name}</span>;
+  return <details>
+    <summary className="flex min-h-8 cursor-pointer list-none items-center gap-2 rounded-md hover:text-foreground focus-visible:ring-2 focus-visible:ring-accent" aria-label={`Cambiar coach principal de ${client.name}`}><span className="break-words">{name}</span><Pencil size={13} className="shrink-0" /></summary>
+    <form action={action} className="mt-2 flex items-start gap-1 pb-1">
+      <input type="hidden" name="clientId" value={client.id} /><input type="hidden" name="field" value="primary" />
+      <select name="value" aria-label={`Coach principal de ${client.name}`} defaultValue={client.primaryCoachId ?? ''} required disabled={pending} className={`${control} w-36`}>
+        <option value="" disabled>Elegir coach</option>{options.map(([id, coachName]) => <option key={id} value={id}>{coachName}</option>)}
+      </select>
+      <button className={iconButton} disabled={pending} title={`Guardar coach principal de ${client.name}`} aria-label={`Guardar coach principal de ${client.name}`}><Save size={16} /></button>
+    </form>
+    {state.error && <p role="alert" className="max-w-48 text-xs text-red-700">{state.error}</p>}
+    {state.success && <p role="status" className="text-xs text-accent">Guardado</p>}
+  </details>;
+}
+
+export function ClientProgressDashboard({ clients, categories, coaches = [], isAdmin, basePath = '/admin', readOnly = false, initialCoach = '', initialSearch = '' }: {
+  clients: ProgressClient[]; categories: ProgressCategory[]; coaches?: ProgressCoach[]; isAdmin: boolean; basePath?: string; readOnly?: boolean; initialCoach?: string; initialSearch?: string;
 }) {
   const [search, setSearch] = useState(initialSearch);
   const [coach, setCoach] = useState(initialCoach);
   const [category, setCategory] = useState('');
   const [sessions, setSessions] = useState('');
-  const [sort, setSort] = useState('start-asc');
+  const [sort, setSort] = useState('entry');
+  const [includeSecondary, setIncludeSecondary] = useState(false);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
-  const coachOptions = useMemo(() => [...new Map(clients.flatMap(c => c.coachIds.map((id,i) => [id,c.coaches[i] ?? id] as const))).entries()].sort((a,b) => a[1].localeCompare(b[1],'es')), [clients]);
+  const coachOptions = useMemo(() => [...new Map([...coaches.map(c => [c.id,c.name] as const), ...clients.flatMap(c => c.coachIds.map((id,i) => [id,c.coaches[i] ?? id] as const))]).entries()].sort((a,b) => a[1].localeCompare(b[1],'es')), [clients, coaches]);
+  const supportIds = useMemo(() => new Set(coaches.filter(c => c.isSupport).map(c => c.id)), [coaches]);
   const visible = useMemo(() => clients.filter(c => {
     const p = sessionProgress(c.calls);
     return (!search || `${c.name} ${c.email}`.toLocaleLowerCase('es').includes(search.toLocaleLowerCase('es'))) &&
-      (!coach || c.coachIds.includes(coach)) && (!category || (category === 'none' ? c.categoryIds.length === 0 : category.startsWith('program:') ? c.operationalStatus === category.slice(8) : c.categoryIds.includes(category))) &&
+      (!coach || c.primaryCoachId === coach || (includeSecondary && c.alsoCoachIds.includes(coach))) && (!category || (category === 'none' ? c.categoryIds.length === 0 : category.startsWith('program:') ? c.operationalStatus === category.slice(8) : c.categoryIds.includes(category))) &&
       (!sessions || (sessions === 'excess' ? p.excess > 0 : sessions === 'complete' ? p.sessions >= SESSION_LIMIT : p.sessions < SESSION_LIMIT)) &&
       (!from || (!!c.startDate && c.startDate >= from)) && (!to || (!!c.startDate && c.startDate <= to));
   }).sort((a,b) => {
     let order = 0;
-    if (sort === 'name') order = a.name.localeCompare(b.name,'es');
+    if (sort === 'entry') order = (a.entryOrder ?? 1e9) - (b.entryOrder ?? 1e9);
+    else if (sort === 'name') order = a.name.localeCompare(b.name,'es');
     else if (sort.startsWith('progress')) order = (a.calls-b.calls) * (sort.endsWith('desc') ? -1 : 1);
     else {
       const left = sort === 'last' ? a.lastCall : a.startDate;
@@ -57,10 +79,10 @@ export function ClientProgressDashboard({ clients, categories, isAdmin, basePath
       else order = left.localeCompare(right) * (sort === 'last' || sort === 'start-desc' ? -1 : 1);
     }
     return order || a.name.localeCompare(b.name,'es');
-  }), [clients, search,coach,category,sessions,sort,from,to]);
+  }), [clients, search,coach,includeSecondary,category,sessions,sort,from,to]);
   const over = clients.filter(c => c.calls > SESSION_LIMIT).length;
   const complete = clients.filter(c => c.calls >= SESSION_LIMIT).length;
-  const reset = () => {setSearch('');setCoach('');setCategory('');setSessions('');setSort('start-asc');setFrom('');setTo('');};
+  const reset = () => {setSearch('');setCoach('');setCategory('');setSessions('');setSort('entry');setIncludeSecondary(false);setFrom('');setTo('');};
   return <div className="space-y-6">
     <header><h1 className="text-2xl font-semibold">Progreso de clientes</h1></header>
     <dl className="grid grid-cols-2 gap-4 border-y border-border py-4 sm:grid-cols-4">
@@ -69,11 +91,12 @@ export function ClientProgressDashboard({ clients, categories, isAdmin, basePath
     <section aria-label="Filtros de progreso" className="flex flex-wrap items-end gap-3">
       <label className="flex min-w-48 flex-1 flex-col gap-1 text-xs text-muted">Cliente<div className="relative"><Search className="absolute left-3 top-3 text-muted" size={16} /><input type="search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Nombre o correo" className={`${control} w-full pl-9`} /></div></label>
       {isAdmin && <label className="flex flex-col gap-1 text-xs text-muted">Coach<select value={coach} onChange={e=>setCoach(e.target.value)} className={`${control} max-w-48`}><option value="">Todos los coaches</option>{coachOptions.map(([id,name])=><option key={id} value={id}>{name}</option>)}</select></label>}
+      {isAdmin && <label className="flex min-h-10 items-center gap-2 pb-2 text-xs text-muted"><input type="checkbox" checked={includeSecondary} onChange={e=>setIncludeSecondary(e.target.checked)} className="h-4 w-4 accent-[--accent]" />Incluir clientes donde es secundario</label>}
       <label className="flex flex-col gap-1 text-xs text-muted">Estado<select value={category} onChange={e=>setCategory(e.target.value)} className={`${control} max-w-52`}><option value="">Todos los estados</option><option value="program:active">Activo</option><option value="program:extension">En extensión</option><option value="program:inactive">Inactivo</option><option value="none">Sin etiquetas</option>{categories.map(c=><option key={c.id} value={c.id}>{c.label}{!c.active ? ' (retirado)' : ''}</option>)}</select></label>
       <label className="flex flex-col gap-1 text-xs text-muted">Sesiones<select value={sessions} onChange={e=>setSessions(e.target.value)} className={control}><option value="">Todas</option><option value="progress">Menos de 12</option><option value="complete">12 o más</option><option value="excess">Más de 12 · alerta</option></select></label>
       <label className="flex flex-col gap-1 text-xs text-muted">Inicio desde<input type="date" value={from} onInput={e=>setFrom(e.currentTarget.value)} onChange={e=>setFrom(e.target.value)} className={`${control} w-40`} /></label>
       <label className="flex flex-col gap-1 text-xs text-muted">Inicio hasta<input type="date" value={to} min={from} onInput={e=>setTo(e.currentTarget.value)} onChange={e=>setTo(e.target.value)} className={`${control} w-40`} /></label>
-      <label className="flex flex-col gap-1 text-xs text-muted">Ordenar por<select value={sort} onChange={e=>setSort(e.target.value)} className={`${control} max-w-56`}><option value="start-asc">Inicio · más antiguo</option><option value="start-desc">Inicio · más reciente</option><option value="progress-desc">Progreso · mayor primero</option><option value="progress-asc">Progreso · menor primero</option><option value="last">Última llamada · reciente</option><option value="name">Nombre · A a Z</option></select></label>
+      <label className="flex flex-col gap-1 text-xs text-muted">Ordenar por<select value={sort} onChange={e=>setSort(e.target.value)} className={`${control} max-w-56`}><option value="entry">Orden de entrada (como la base)</option><option value="start-asc">Inicio · más antiguo</option><option value="start-desc">Inicio · más reciente</option><option value="progress-desc">Progreso · mayor primero</option><option value="progress-asc">Progreso · menor primero</option><option value="last">Última llamada · reciente</option><option value="name">Nombre · A a Z</option></select></label>
       <button onClick={reset} className={iconButton} title="Limpiar filtros" aria-label="Limpiar filtros"><X size={16} /></button>
     </section>
     {from && to && from > to && <p role="alert" className="text-sm text-red-700">La fecha inicial del filtro debe ser anterior a la final.</p>}
@@ -86,11 +109,11 @@ export function ClientProgressDashboard({ clients, categories, isAdmin, basePath
           return <tr key={client.id} className="align-top hover:bg-surface-muted/40">
             <td className="px-4 py-3"><Link prefetch={false} href={`${basePath}/clients/${client.id}`} className={`flex min-h-10 max-w-60 items-center gap-2 font-medium hover:underline ${p.excess ? 'text-red-700' : 'text-foreground'}`}>
               {p.excess > 0 && <TriangleAlert size={16} className="shrink-0" aria-label="Excede 12 sesiones" />}<span className="break-words">{client.name}</span></Link>{p.excess > 0 && <p className="text-xs text-red-700">{p.excess} {p.excess===1?'sesión':'sesiones'} sobre el límite</p>}</td>
-            {isAdmin && <td className="max-w-44 px-4 py-5 text-muted">{client.coaches.join(', ') || 'Sin coach'}</td>}
+            {isAdmin && <td className="max-w-48 px-4 py-4 text-muted"><PrimaryCoachEditor key={`${client.id}-${client.primaryCoachId}`} client={client} coaches={coachOptions} supportIds={supportIds} readOnly={readOnly} />{client.alsoCoaches.length > 0 && <p className="mt-0.5 text-xs text-muted-2">También: {client.alsoCoaches.join(', ')}</p>}</td>}
             <td className="px-4 py-5"><div className="flex w-40 items-center gap-3"><div role="progressbar" aria-label={`Progreso de ${client.name}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={p.percent} aria-valuetext={`${p.sessions} de ${SESSION_LIMIT} sesiones`} className="h-2 flex-1 overflow-hidden rounded-full bg-surface-muted"><div className={`h-full ${p.excess?'bg-red-600':'bg-accent'}`} style={{width:`${p.percent}%`}} /></div><span className={`w-10 text-right font-semibold tabular-nums ${p.excess?'text-red-700':''}`}>{p.percent}%</span></div></td>
             <td className={`px-4 py-5 tabular-nums ${p.excess?'font-semibold text-red-700':'text-muted'}`}>{p.sessions} / {SESSION_LIMIT}</td>
             <td className="px-4 py-3 text-muted">{readOnly ? formatDate(client.startDate) : <RowEditor key={`${client.id}-start-${client.startDate}`} client={client} />}</td>
-            <td className="whitespace-nowrap px-4 py-5 text-muted">{formatDate(progressEndDate(client.startDate))}</td>
+            <td className="whitespace-nowrap px-4 py-5 text-muted">{formatDate(client.endDate ?? progressEndDate(client.startDate))}</td>
             <td className="whitespace-nowrap px-4 py-5 text-muted">{formatDate(client.lastCall)}</td>
             <td className="px-4 py-3"><ClientStateSelector client={client} categories={categories} isAdmin={isAdmin} readOnly={readOnly} /></td>
           </tr>;
