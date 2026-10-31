@@ -25,7 +25,7 @@ resúmenes. El SQL también está en `neon-add-coach-fees.sql`.
 ## Comportamiento
 
 - Cada llamada con coach y fecha aparece automáticamente, una sola vez por su ID.
-- Cada llamada parte de una hora y COP 100.000 por hora; se conservan los valores editados.
+- Cada llamada parte de las horas que marca su duración en Fathom, a COP 100.000 por hora: hasta 35 min = 0,5 h; hasta 80 min = 1 h; hasta 105 min = 1,5 h; más = 2 h. **El máximo que se paga es 2 horas (COP 200.000)**; el editor no deja guardar más. Se conservan los valores editados.
 - Al cambiar las horas de una llamada en el editor, se recalcula su valor a esa tarifa.
 - Los trabajos sin llamada se pueden registrar como actividades manuales.
 - La fecha de pago marca una actividad como pagada; exige valor y tipo de pago.

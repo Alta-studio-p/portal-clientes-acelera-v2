@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { requireRole } from '@/lib/auth';
 import { getSql } from '@/lib/db';
-import { CALL_HOURLY_RATE, PAYMENT_TYPES } from '@/lib/coach-fees';
+import { CALL_HOURLY_RATE, MAX_FEE_AMOUNT, MAX_FEE_HOURS, PAYMENT_TYPES } from '@/lib/coach-fees';
 import { emailToLearn } from '@/lib/client-matching.mjs';
 
 export interface FeeState { error: string | null; success: boolean }
@@ -31,8 +31,8 @@ export async function saveFee(_previous: FeeState, form: FormData): Promise<FeeS
   if (![coachId, ...[id, callId, clientId, callCoachId].filter((v): v is string => v !== null)].every(v => uuid.test(v))) return fail('Identificador no válido.');
   if (!topic || topic.length > 500) return fail('Escribe un tema de hasta 500 caracteres.');
   if (!validDate(serviceDate) || (paidOn && !validDate(paidOn))) return fail('Revisa las fechas.');
-  if (hours !== null && (!Number.isFinite(hours) || hours <= 0 || hours > 9999 || Math.abs(hours * 100 - Math.round(hours * 100)) > 0.00001)) return fail('Las horas deben ser mayores que cero, con máximo dos decimales.');
-  if (amount !== null && (!Number.isFinite(amount) || amount < 0 || amount > 999999999999 || Math.abs(amount * 100 - Math.round(amount * 100)) > 0.00001)) return fail('Revisa el valor en pesos, con máximo dos decimales.');
+  if (hours !== null && (!Number.isFinite(hours) || hours <= 0 || hours > MAX_FEE_HOURS || Math.abs(hours * 100 - Math.round(hours * 100)) > 0.00001)) return fail('Las horas deben ser mayores que cero y máximo 2 (COP $200.000), con máximo dos decimales.');
+  if (amount !== null && (!Number.isFinite(amount) || amount < 0 || amount > MAX_FEE_AMOUNT || Math.abs(amount * 100 - Math.round(amount * 100)) > 0.00001)) return fail('Revisa el valor en pesos: máximo COP $200.000, con máximo dos decimales.');
   if (paymentType && !PAYMENT_TYPES.some(p => p.value === paymentType)) return fail('Selecciona un tipo de pago válido.');
   if (paidOn && (amount === null || !paymentType)) return fail('Para registrar un pago, completa el valor y el tipo de pago.');
 

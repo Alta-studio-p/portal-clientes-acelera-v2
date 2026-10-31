@@ -28,6 +28,9 @@ export const MATCH_METHOD_LABELS = {
 } as const;
 
 export const CALL_HOURLY_RATE = 100_000;
+/** Máximo que se paga por una actividad: 2 horas = COP $200.000. */
+export const MAX_FEE_HOURS = 2;
+export const MAX_FEE_AMOUNT = 200_000;
 
 export const PAYMENT_TYPES = [
   { value: 'transfer', label: 'Transferencia bancaria' },
