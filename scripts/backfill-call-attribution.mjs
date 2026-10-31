@@ -4,10 +4,10 @@
 // valores, estados ni fechas de pago; solo actualiza campos de atribución.
 import fs from 'node:fs';
 import { createSqlClient } from '../lib/postgres.mjs';
-import { matchClient, clientInvitees } from '../lib/client-matching.mjs';
+import { matchClient, matchClientBySpeakers, clientInvitees } from '../lib/client-matching.mjs';
 import { resolveCallCoach, sessionKey } from '../lib/coach-attribution.mjs';
 import { fathomSourcesFromEnv, listMeetingsLight } from '../lib/fathom-api.mjs';
-import { fetchCallSpeakers, isInternalCall, summarizeSpeakers } from '../lib/call-speakers.mjs';
+import { fetchCallSpeakers, isInternalCall, nonCoachSpeakerNames, summarizeSpeakers } from '../lib/call-speakers.mjs';
 
 const APPLY = process.argv.includes('--apply');
 const SKIP_FATHOM = process.argv.includes('--skip-fathom');
@@ -104,6 +104,27 @@ try {
     }
     call.client_id = result.client.id;
   }
+  // 2b. Sin email ni nombre en el título: el nombre de quien habla en la transcripción pública identifica al cliente.
+  const bySpeaker = [];
+  for (const entry of ONLY_COACH ? [] : [...stillUnlinked]) {
+    const { call } = entry;
+    if (!call.share_url) continue;
+    const speakers = await fetchCallSpeakers(call.share_url);
+    if (!speakers) continue;
+    const info = summarizeSpeakers(speakers);
+    if (isInternalCall(info)) continue; // llamada interna: no tiene cliente
+    const result = matchClientBySpeakers(nonCoachSpeakerNames(speakers), clients);
+    entry.reason = result.reason;
+    if (!result.client) continue;
+    bySpeaker.push({ call, client: result.client });
+    stillUnlinked.splice(stillUnlinked.indexOf(entry), 1);
+    const audit = JSON.stringify({ client_match_reason: 'transcript_speaker', speaker_summary: info });
+    await write(`update public.calls set client_id = $2::uuid, client_match_method = 'name', raw_metadata = coalesce(raw_metadata, '{}'::jsonb) || $3::jsonb where id = $1::uuid and client_id is null`, [call.id, result.client.id, audit]);
+    await write(`update public.coach_fees set client_id = $2::uuid where call_id = $1::uuid and client_id is null`, [call.id, result.client.id]);
+    call.client_id = result.client.id;
+  }
+  console.log(`[2b] Vinculadas por quien habla en la transcripción: ${bySpeaker.length}`);
+  for (const { call, client } of bySpeaker) console.log(`   ${label(call)} → ${client.full_name}`);
   console.log(`[2] Sin cliente: ${unlinked.length} → vinculadas por email: ${linkedBy.email.length}, email alterno: ${linkedBy.alt_email.length}, nombre: ${linkedBy.name.length}; siguen sin cliente: ${stillUnlinked.length}`);
   for (const { call, result } of linkedBy.name) console.log(`   nombre → ${label(call)} → ${result.client.full_name}${result.learnEmail ? ` (guardaría email alterno ${result.learnEmail})` : ''}`);
 

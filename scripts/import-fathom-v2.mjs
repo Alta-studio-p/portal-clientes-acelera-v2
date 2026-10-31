@@ -1,8 +1,8 @@
 import fs from "node:fs";
-import { matchClient, INTERNAL_DOMAIN, IGNORED_EMAIL_DOMAINS as EXCLUDED_EMAIL_DOMAINS, IGNORED_EMAILS as EXCLUDED_EMAILS } from "../lib/client-matching.mjs";
+import { matchClient, matchClientBySpeakers, INTERNAL_DOMAIN, IGNORED_EMAIL_DOMAINS as EXCLUDED_EMAIL_DOMAINS, IGNORED_EMAILS as EXCLUDED_EMAILS } from "../lib/client-matching.mjs";
 import { normalizeIdentity } from "../lib/client-matching.mjs";
 import { resolveCallCoach, sessionKey } from "../lib/coach-attribution.mjs";
-import { fetchCallSpeakers, isInternalCall, speakingCoachEmails, summarizeSpeakers } from "../lib/call-speakers.mjs";
+import { fetchCallSpeakers, isInternalCall, nonCoachSpeakerNames, speakingCoachEmails, summarizeSpeakers } from "../lib/call-speakers.mjs";
 import { contextFromCall } from "../lib/call-context.mjs";
 
 const APPLY = process.argv.includes("--apply") && process.env.FATHOM_AUDIT_ONLY !== "true";
@@ -468,7 +468,8 @@ async function main() {
 
       if (!meeting.recording_id) throw new Error(`Fathom ${source.key}: meeting without recording_id.`);
       const matched = clientForMeeting(meeting, clients);
-      const client = matched.client;
+      let client = matched.client;
+      let clientMethod = matched.method, clientReason = matched.reason;
       if (matched.reason.startsWith("ambiguous")) stats.ambiguous += 1;
       // El coach es quien grabó la llamada; si no se sabe, el coach del cliente (y se marca por confirmar).
       const attributionInput = {
@@ -489,6 +490,11 @@ async function main() {
         attribution = { coachId: principalCoach.id, resolution: "recorded_by", needsConfirmation: false };
         internalCall = true;
       }
+      // Sin cliente por email ni nombre: el nombre de quien habla en la transcripción lo identifica.
+      if (!client && speakers && !internalCall) {
+        const bySpeaker = matchClientBySpeakers(nonCoachSpeakerNames(speakers), clients);
+        if (bySpeaker.client) { client = bySpeaker.client; clientMethod = bySpeaker.method; clientReason = bySpeaker.reason; }
+      }
       if (!knownCalls.has(String(meeting.recording_id))) {
         if (!seenIds.has(String(meeting.recording_id))) stats.missing += 1;
         sourceMissing += 1;
@@ -503,7 +509,7 @@ async function main() {
 
       const row = {
         client_id: client?.id ?? null,
-        client_match_method: matched.method,
+        client_match_method: clientMethod,
         coach_id: attribution.coachId,
         coach_resolution: attribution.resolution,
         coach_needs_confirmation: attribution.needsConfirmation,
@@ -529,7 +535,7 @@ async function main() {
           recorded_by: meeting.recorded_by ?? null,
           speaker_summary: speakers ? summarizeSpeakers(speakers) : undefined,
           internal_call: internalCall || undefined,
-          client_match_reason: matched.reason,
+          client_match_reason: clientReason,
         },
       };
 
