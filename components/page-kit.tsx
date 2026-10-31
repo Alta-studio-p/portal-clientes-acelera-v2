@@ -1,0 +1,97 @@
+import type { ReactNode } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+
+// Piezas visuales compartidas por todas las vistas del portal: encabezado de página,
+// selector tipo pastilla, barra de periodo, tarjeta de métrica y tarjeta de tabla.
+// Cambiar aquí cambia el estilo en todas las vistas. No contienen texto propio.
+
+export const pillField = 'h-10 rounded-xl border border-border bg-surface px-3.5 text-sm text-foreground outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:opacity-50';
+export const pillIconButton = 'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-surface text-muted transition hover:bg-surface-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-40';
+
+/** Título grande y, debajo, subtítulo gris (solo si la vista ya lo tiene). `kicker` es el texto pequeño de acento que algunas vistas ya muestran encima. */
+export function PageHeading({ title, subtitle, kicker, actions }: { title: string; subtitle?: string; kicker?: string; actions?: ReactNode }) {
+  return <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+    <div className="min-w-0">
+      {kicker && <p className="mb-1 text-sm font-medium text-accent">{kicker}</p>}
+      <h1 className="text-2xl font-semibold tracking-tight text-foreground">{title}</h1>
+      {subtitle && <p className="mt-1 text-sm text-muted">{subtitle}</p>}
+    </div>
+    {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+  </div>;
+}
+
+/**
+ * Selector tipo pastilla: botones en una barra redondeada gris; la opción activa va en blanco con sombra suave.
+ * Con más de 6 opciones muestra un desplegable con el mismo estilo redondeado. En pantallas angostas hace scroll horizontal.
+ */
+export function SegmentedControl({ label, options, value, onChange, disabled = false }: {
+  label: string; options: { value: string; label: string }[]; value: string; onChange: (value: string) => void; disabled?: boolean;
+}) {
+  if (options.length > 6) {
+    return <label className="block w-full sm:w-64"><span className="mb-1.5 block text-xs font-medium text-muted">{label}</span>
+      <select className={`${pillField} w-full`} value={value} disabled={disabled} onChange={e => onChange(e.target.value)}>{options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select>
+    </label>;
+  }
+  return <div>
+    <span className="mb-1.5 block text-xs font-medium text-muted">{label}</span>
+    <div role="radiogroup" aria-label={label} className="-mx-4 max-w-[100vw] overflow-x-auto px-4 sm:mx-0 sm:max-w-full sm:px-0">
+      <div className="inline-flex gap-1 rounded-2xl border border-border bg-surface-muted p-1">
+        {options.map(o => <button key={o.value} type="button" role="radio" aria-checked={o.value === value} disabled={disabled} onClick={() => onChange(o.value)}
+          className={`whitespace-nowrap rounded-xl px-4 py-2 text-sm font-medium transition focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-60 ${o.value === value ? 'bg-surface text-foreground shadow-sm' : 'text-muted hover:text-foreground'}`}>{o.label}</button>)}
+      </div>
+    </div>
+  </div>;
+}
+
+const MONTH_NAMES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+const shiftMonth = (month: string, step: number) => { const [y, m] = month.split('-').map(Number); return new Date(Date.UTC(y, m - 1 + step, 1)).toISOString().slice(0, 7); };
+/** "2026-10" → "Octubre 2026" */
+export function monthLabelEs(month: string) { const [y, m] = month.split('-').map(Number); return `${MONTH_NAMES[m - 1]} ${y}`; }
+/** Meses disponibles en el desplegable, el más reciente primero: desde enero de 2025 hasta 2 meses después del actual. */
+export function monthOptions(selected: string, current: string) {
+  const first = selected < '2025-01' ? selected : '2025-01';
+  const lastWanted = shiftMonth(current, 2);
+  const last = selected > lastWanted ? selected : lastWanted;
+  const list: { value: string; label: string }[] = [];
+  for (let m = last; m >= first; m = shiftMonth(m, -1)) list.push({ value: m, label: monthLabelEs(m) });
+  return list;
+}
+
+/** Tarjeta blanca de ancho completo: etiqueta del periodo, flecha anterior, mes (en español), flecha siguiente; a la derecha, las acciones (exportar). */
+export function PeriodBar({ label, month, currentMonth, onChange, previousTitle, nextTitle, disabled = false, actions }: {
+  label: string; month: string; currentMonth: string; onChange: (month: string) => void; previousTitle: string; nextTitle: string; disabled?: boolean; actions?: ReactNode;
+}) {
+  return <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-surface px-4 py-3">
+    <div className="flex flex-wrap items-center gap-2.5">
+      <span className="text-sm text-muted">{label}</span>
+      <button type="button" disabled={disabled} className={pillIconButton} onClick={() => onChange(shiftMonth(month, -1))} title={previousTitle} aria-label={previousTitle}><ChevronLeft size={16} /></button>
+      <select aria-label={label} value={month} disabled={disabled} onChange={e => onChange(e.target.value)} className={`${pillField} min-w-44 font-medium`}>
+        {monthOptions(month, currentMonth).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+      <button type="button" disabled={disabled} className={pillIconButton} onClick={() => onChange(shiftMonth(month, 1))} title={nextTitle} aria-label={nextTitle}><ChevronRight size={16} /></button>
+    </div>
+    {actions && <div className="flex items-center gap-2">{actions}</div>}
+  </div>;
+}
+
+/** Tarjeta de métrica: número grande y etiqueta pequeña en gris. */
+export function MetricCard({ label, value, hint }: { label: string; value: ReactNode; hint?: ReactNode }) {
+  return <div className="min-w-0 rounded-2xl border border-border bg-surface px-5 py-4">
+    <p className="break-words text-2xl font-semibold tabular-nums tracking-tight text-foreground">{value}</p>
+    <p className="mt-1.5 text-xs font-medium text-muted">{label}</p>
+    {hint && <p className="mt-0.5 text-xs text-muted-2">{hint}</p>}
+  </div>;
+}
+
+/** Tarjeta blanca con esquinas redondeadas para una tabla; hace scroll horizontal en pantallas angostas. */
+export function TableCard({ label, children }: { label: string; children: ReactNode }) {
+  return <div className="overflow-x-auto rounded-2xl border border-border bg-surface" tabIndex={0} aria-label={label}>{children}</div>;
+}
+
+// Clases de tabla: encabezado en mayúsculas pequeñas grises con espacio entre letras, filas holgadas y fila de totales en el color de acento.
+export const tableHead = 'bg-surface-muted/60 text-[11px] font-semibold uppercase tracking-wider text-muted';
+export const tableHeadCell = 'whitespace-nowrap px-5 py-3.5';
+export const tableBody = 'divide-y divide-border/70';
+export const tableRow = 'transition hover:bg-accent-soft/30';
+export const tableCell = 'px-5 py-4';
+export const tableFoot = 'border-t border-border bg-accent-soft/50 font-semibold text-accent';
