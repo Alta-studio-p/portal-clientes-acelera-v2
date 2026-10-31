@@ -7,6 +7,7 @@ const clients = [
   { id: 'b', full_name: 'David Gómez Pérez', email: 'david@x.com', alternate_emails: [] },
   { id: 'c', full_name: 'Juan Pérez', email: 'juanp@x.com', alternate_emails: [] },
   { id: 'd', full_name: 'Juan Pérez Mora', email: 'juanm@x.com', alternate_emails: [] },
+  { id: 'f', full_name: 'Carlos Herreño', email: null, alternate_emails: [] },
   { id: 'e', full_name: 'Beto', email: 'beto@x.com', alternate_emails: [] },
 ];
 const check = (meeting, id, method) => {
@@ -24,6 +25,8 @@ check({ title: 'Sesión David Gomez', invitees: [{ email: 'elkin@x.com' }] }, 'a
 const byName = check({ title: 'Mentoría   DAVID gomez', invitees: [{ email: 'nuevo@gmail.com', name: 'x' }] }, 'b', 'name');
 assert.equal(byName.learnEmail, 'nuevo@gmail.com');
 check({ invitees: [{ email: 'nuevo@gmail.com', name: 'Elkin Ospina' }] }, 'a', 'name');
+check({ invitees: [{ email: 'c@h.com', name: 'Carlos Alberto Herreño Vargas' }] }, 'f', 'name');
+check({ title: 'Testimonio Leo Cardenas' }, null, null);
 // Ambiguo o sin coincidencia: nunca se adivina.
 check({ title: 'Juan Pérez' }, null, null); // "Juan Pérez" también es prefijo de "Juan Pérez Mora"
 check({ title: 'Reunión con Beto' }, null, null); // un solo nombre no alcanza

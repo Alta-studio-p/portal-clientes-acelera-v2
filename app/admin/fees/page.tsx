@@ -1,6 +1,6 @@
 import { requireRole } from '@/lib/auth';
 import { getCoachesWithClients } from '@/lib/data/admin';
-import { getAllClientOptions, getCoachFees } from '@/lib/data/coach-fees';
+import { getAllClientOptions, getBillableCoachIds, getCoachFees } from '@/lib/data/coach-fees';
 import { validMonth } from '@/lib/coach-fees';
 import { PageHeader, EmptyState } from '@/components/ui';
 import { CoachFeesDashboard } from '@/components/coach-fees-dashboard';
@@ -8,7 +8,8 @@ import { CoachFeesDashboard } from '@/components/coach-fees-dashboard';
 export default async function CoachFeesPage({ searchParams }: { searchParams: Promise<{ coach?: string; month?: string }> }) {
   await requireRole(['admin']);
   const params = await searchParams;
-  const coaches = await getCoachesWithClients();
+  const billable = await getBillableCoachIds();
+  const coaches = (await getCoachesWithClients()).filter(c => billable.has(c.id));
   const coach = coaches.find(c => c.id === params.coach) ?? coaches.find(c => c.is_active) ?? coaches[0];
   const month = validMonth(params.month);
   if (!coach) return <><PageHeader title="Llamadas" /><EmptyState title="Sin coaches registrados" /></>;

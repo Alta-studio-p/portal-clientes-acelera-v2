@@ -9,3 +9,6 @@ alter table public.calls add column if not exists client_match_method text
 alter table public.calls add column if not exists coach_resolution text
   check (coach_resolution in ('recorded_by', 'fallback', 'manual'));
 alter table public.calls add column if not exists coach_needs_confirmation boolean not null default false;
+
+-- La coach principal no cobra por llamadas: no aparece en la sección Llamadas.
+alter table public.coaches add column if not exists bills_by_call boolean not null default true;

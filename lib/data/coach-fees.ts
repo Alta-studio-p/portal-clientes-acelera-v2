@@ -6,6 +6,12 @@ import { displayCallTitle } from '@/lib/call-title';
 import { publicRecordingUrl } from '@/lib/recording-link';
 import { CALL_HOURLY_RATE, monthBounds, type FeeRow } from '@/lib/coach-fees';
 
+/** Coaches que cobran por llamada (la coach principal no aparece en la sección Llamadas). */
+export async function getBillableCoachIds(): Promise<Set<string>> {
+  const rows = await getSql()`select id::text from public.coaches where bills_by_call`;
+  return new Set(rows.map(r => r.id as string));
+}
+
 export async function getAllClientOptions() {
   await requireRole(['admin']);
   const rows = await getSql()`select id::text, coalesce(full_name, email) as name from public.clients order by coalesce(full_name, email), id`;

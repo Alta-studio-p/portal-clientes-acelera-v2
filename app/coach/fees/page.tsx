@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { requireRole } from '@/lib/auth';
 import { getCoachByProfileId } from '@/lib/data/client-detail';
-import { getCoachFees } from '@/lib/data/coach-fees';
+import { getBillableCoachIds, getCoachFees } from '@/lib/data/coach-fees';
 import { validMonth } from '@/lib/coach-fees';
 import { CoachFeesDashboard } from '@/components/coach-fees-dashboard';
 
@@ -11,6 +11,7 @@ export default async function MyFeesPage({ searchParams }: {
   const { userId } = await requireRole(['coach']);
   const coach = await getCoachByProfileId(userId);
   if (!coach) redirect('/login?error=no_profile');
+  if (!(await getBillableCoachIds()).has(coach.id)) redirect('/coach');
   const { month: requestedMonth } = await searchParams;
   const month = validMonth(requestedMonth);
   // The coach comes exclusively from the authenticated profile, never the URL.
