@@ -55,7 +55,7 @@ jobs:
 
       - name: Comprueba coincidencias y proteccion de datos manuales
         run: |
-          node scripts/test-meeting-client-match.mjs
+          node scripts/test-client-matching.mjs
           node scripts/test-import-preservation.mjs
           node scripts/test-translation-preservation.mjs
 

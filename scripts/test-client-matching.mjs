@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
-import { matchClient, emailToLearn } from '../lib/client-matching.mjs';
+import { matchClient, matchClientBySpeakers, emailToLearn } from '../lib/client-matching.mjs';
 import { resolveCallCoach } from '../lib/coach-attribution.mjs';
+import { nonCoachSpeakerNames, summarizeSpeakers, isInternalCall } from '../lib/call-speakers.mjs';
 
 const clients = [
   { id: 'a', full_name: 'Elkin Ospina', email: 'elkin@x.com', alternate_emails: ['elkin.work@y.com'] },
@@ -39,6 +40,24 @@ assert.equal(emailToLearn([{ email: 'mari.aceleratalent@gmail.com' }, { email: '
 assert.equal(emailToLearn([{ email: 'a@z.com' }, { email: 'b@z.com' }], clients), null); // dos nuevos: no se sabe cuál
 assert.equal(emailToLearn([{ email: 'elkin@x.com' }], clients), null); // ya pertenece a un cliente
 
+// Exercise the transcript-based matching used by the current importer too.
+assert.equal(matchClientBySpeakers(['DAVID Gomez Perez'], clients).client?.id, 'b');
+assert.equal(matchClientBySpeakers(['Carlos Alberto Herreño Vargas'], clients).client?.id, 'f');
+assert.equal(matchClientBySpeakers(['David'], clients).client, null);
+assert.equal(matchClientBySpeakers(['Elkin Ospina', 'David Gomez Perez'], clients).reason, 'ambiguous_speakers');
+assert.equal(matchClientBySpeakers(['Juan Pérez', 'Juan Pérez Mora'], clients).reason, 'ambiguous_speakers');
+assert.equal(matchClientBySpeakers([], clients).reason, 'no_speaker_match');
+const speakers = {
+  'Ross a (Joinaceleratalent)': { turns: 5, chars: 100 },
+  'David Gomez Perez': { turns: 4, chars: 100 },
+  'Fathom Notetaker': { turns: 5, chars: 100 },
+  'Guest': { turns: 1, chars: 5 },
+};
+assert.deepEqual(nonCoachSpeakerNames(speakers), ['David Gomez Perez']);
+assert.equal(matchClientBySpeakers(nonCoachSpeakerNames(speakers), clients).client?.id, 'b');
+assert.equal(isInternalCall(summarizeSpeakers(speakers)), false);
+assert.equal(isInternalCall(summarizeSpeakers({ 'Ross a': { turns: 5, chars: 100 } })), true);
+
 const coaches = [{ id: 'mari', email: 'mari@joinaceleratalent.com', alternate_emails: ['mari.aceleratalent@gmail.com'] }, { id: 'alex', email: 'alex@joinaceleratalent.com' }];
 // Mari grabó la llamada de un cliente de Alex: la llamada es de Mari.
 assert.deepEqual(resolveCallCoach({ recordedByEmail: 'Mari@joinaceleratalent.com', coaches, assignedCoachId: 'alex', sourceCoachId: 'alex' }), { coachId: 'mari', resolution: 'recorded_by', needsConfirmation: false });
@@ -52,4 +71,4 @@ assert.deepEqual(resolveCallCoach({ recordedByEmail: 'coach@joinaceleratalent.co
 assert.equal(resolveCallCoach({ recordedByEmail: 'coach@joinaceleratalent.com', speakerEmails: ['coach@joinaceleratalent.com', 'mari@joinaceleratalent.com'], coaches: team, hasOwnRecording: true }).coachId, 'caro');
 assert.equal(resolveCallCoach({ recordedByEmail: 'coach@joinaceleratalent.com', speakerEmails: ['alex@joinaceleratalent.com', 'mari@joinaceleratalent.com'], coaches: team }).coachId, 'caro'); // dos coaches: no se adivina
 assert.equal(resolveCallCoach({ recordedByEmail: 'coach@joinaceleratalent.com', speakerEmails: ['coach@joinaceleratalent.com'], coaches: team }).coachId, 'caro');
-console.log('PASS: vínculo email → alterno → nombre, sin adivinar; coach = quien grabó');
+console.log('PASS: email, alternate email, name and transcript matching; ambiguous matches rejected; internal calls and coach attribution');
