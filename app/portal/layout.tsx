@@ -2,7 +2,10 @@ import type { ReactNode } from "react";
 import { requireRole } from "@/lib/auth";
 import { AppShell } from "@/components/app-shell";
 
-const NAV_ITEMS = [{ href: "/portal", label: "Mi progreso" }];
+const NAV_ITEMS = [
+  { href: "/portal", label: "Mi progreso" },
+  { href: "/portal/masterclasses", label: "Masterclases" },
+];
 
 export default async function PortalLayout({ children }: { children: ReactNode }) {
   const { profile, email } = await requireRole(["client"]);

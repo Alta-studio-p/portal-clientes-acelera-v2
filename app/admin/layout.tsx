@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { href: "/admin/calendar", label: "Calendario" },
   { href: "/admin/coaches", label: "Coaches" },
   { href: "/admin/fees", label: "Llamadas" },
+  { href: "/admin/masterclasses", label: "Masterclases" },
 ];
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
