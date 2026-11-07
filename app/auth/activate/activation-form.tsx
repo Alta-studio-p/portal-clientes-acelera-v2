@@ -43,12 +43,16 @@ export function ActivationForm() {
         setEmail(data.user.email ?? '');
         setReady(true);
       } catch {
-        setError('El enlace venció o no es válido. Solicita uno nuevo desde “Olvidé mi contraseña”.');
+        setError('El enlace venció o no es válido.');
       }
     }
     void activate();
   }, []);
-  if (error) return <div><p role="alert" className="text-sm text-[var(--danger)]">{error}</p><Link href="/login/forgot-password" className="mt-4 inline-flex min-h-11 items-center text-sm text-accent hover:underline">Solicitar otro enlace</Link></div>;
+  if (error) return <div>
+    <p role="alert" className="text-sm text-[var(--danger)]">{error}</p>
+    <Link href="/register" className="mt-4 flex min-h-11 items-center text-sm text-accent hover:underline">Solicitar otro enlace de onboarding</Link>
+    <Link href="/login/forgot-password" className="flex min-h-11 items-center text-sm text-accent hover:underline">Restablecer mi contraseña</Link>
+  </div>;
   if (!ready) return <p role="status" className="text-sm text-muted">Verificando tu acceso…</p>;
   const input = 'mt-2 h-11 w-full rounded-md border border-border bg-surface px-3 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20';
   return <form action={action} className="space-y-4">

@@ -3,8 +3,25 @@
 import Link from 'next/link';
 import { useActionState } from 'react';
 import { requestClientRegistration, type RegistrationState } from './actions';
+import { requestOnboardingAccess } from './onboarding-actions';
 
 const initial: RegistrationState = { error: null, message: null };
+
+export function OnboardingRegistrationForm() {
+  const [state, action, pending] = useActionState(requestOnboardingAccess, initial);
+  return <form action={action} className="space-y-5">
+    <label htmlFor="onboarding-email" className="block text-sm font-medium">Correo de tu onboarding
+      <input id="onboarding-email" name="email" type="email" required maxLength={254} autoComplete="email" autoCapitalize="none" spellCheck={false}
+        className="mt-2 min-h-11 w-full rounded-md border border-border bg-surface px-3 py-2 text-base outline-none focus:border-accent focus:ring-1 focus:ring-accent" />
+    </label>
+    {state.error && <p role="alert" className="text-sm text-red-700">{state.error}</p>}
+    {state.message && <p role="status" className="text-sm leading-6 text-muted">{state.message}</p>}
+    <button disabled={pending} className="min-h-11 w-full rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-60">
+      {pending ? 'Enviando…' : 'Solicitar enlace de acceso'}
+    </button>
+    <p className="text-center text-sm text-muted">¿Ya tienes contraseña? <Link className="text-accent hover:underline" href="/login">Iniciar sesión</Link></p>
+  </form>;
+}
 
 export function RegistrationForm() {
   const [state, action, pending] = useActionState(requestClientRegistration, initial);
