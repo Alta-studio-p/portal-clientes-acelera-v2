@@ -20,7 +20,7 @@ export async function inviteClient(_previous: InviteState, form: FormData): Prom
   let invitationSent = false;
   try {
     const sql = getSql();
-    const [client] = await sql`select id::text, profile_id::text, email, full_name from public.clients where id = ${clientId}::uuid`;
+    const [client] = await sql`select id::text, profile_id::text, coalesce(email, onboarding_email) as email, full_name from public.clients where id = ${clientId}::uuid`;
     if (!client) return fail('No se encontró el cliente.');
     const email = String(client.email ?? '').trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail('La ficha necesita un correo válido antes de invitar al cliente.');
@@ -28,7 +28,9 @@ export async function inviteClient(_previous: InviteState, form: FormData): Prom
     const conflicts = await sql`
       select id from public.profiles where lower(email) = ${email} and role <> 'client'
       union all select id from public.coaches where lower(email) = ${email}
-      union all select id from public.clients where lower(trim(email)) = ${email} and id <> ${clientId}::uuid
+      union all select id from public.clients where id <> ${clientId}::uuid and
+        (lower(trim(email)) = ${email} or lower(trim(onboarding_email)) = ${email}
+          or exists (select 1 from unnest(alternate_emails) e where lower(trim(e)) = ${email}))
     `;
     if (conflicts.length) return fail('Ese correo pertenece a otra ficha o a una cuenta del equipo. No se cambió su acceso.');
     const redirectTo = await getActivationUrl(manualLink);
@@ -67,7 +69,7 @@ export async function inviteClient(_previous: InviteState, form: FormData): Prom
     const linked = await sql`
       with eligible as (
         select id from public.clients where id = ${clientId}::uuid
-          and lower(trim(email)) = ${email} and (profile_id is null or profile_id = ${user.id}::uuid)
+          and lower(trim(coalesce(email, onboarding_email))) = ${email} and (profile_id is null or profile_id = ${user.id}::uuid)
           and not exists (select 1 from public.clients where profile_id = ${user.id}::uuid and id <> ${clientId}::uuid)
           and not exists (select 1 from public.coaches where profile_id = ${user.id}::uuid)
         for update
@@ -78,7 +80,7 @@ export async function inviteClient(_previous: InviteState, form: FormData): Prom
           where profiles.role = 'client' and lower(profiles.email) = ${email}
         returning id
       )
-      update public.clients set profile_id = profile.id, updated_at = now()
+      update public.clients set profile_id = profile.id, email = coalesce(clients.email, ${email}), updated_at = now()
       from profile, eligible where clients.id = eligible.id returning clients.id
     `;
     if (!linked.length) return fail('No se pudo vincular la cuenta. Recarga y revisa si la ficha tiene otro acceso.');

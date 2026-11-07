@@ -4,6 +4,7 @@ import { normalizeIdentity } from "../lib/client-matching.mjs";
 import { resolveCallCoach, sessionKey } from "../lib/coach-attribution.mjs";
 import { fetchCallSpeakers, isInternalCall, nonCoachSpeakerNames, speakingCoachEmails, summarizeSpeakers } from "../lib/call-speakers.mjs";
 import { contextFromCall } from "../lib/call-context.mjs";
+import { identifyOnboardingCandidates, primaryOnboardingRecording } from "../lib/onboarding-candidates.mjs";
 
 const APPLY = process.argv.includes("--apply") && process.env.FATHOM_AUDIT_ONLY !== "true";
 const MAX_PAGES = Number(process.env.FATHOM_MAX_PAGES || 200);
@@ -228,7 +229,33 @@ async function allRows(path, order = "id") {
 }
 
 async function readCoaches() {
-  return allRows("coaches?select=id,email,full_name,fathom_source_key,alternate_emails,bills_by_call");
+  return allRows("coaches?select=id,email,full_name,fathom_source_key,alternate_emails,bills_by_call,is_active");
+}
+
+async function createOnboardingClients(coaches) {
+  if (!APPLY || ONLY_SOURCE) return;
+  const since = new Date(Math.max(Date.now() - 14 * 86400_000, Date.parse("2026-11-06T05:00:00Z"))).toISOString();
+  const calls = await allRows(
+    "calls?select=id,fathom_call_id,title,client_id,started_at,summary,coach_id,coach_resolution,coach_needs_confirmation,raw_metadata" +
+    `&source=eq.fathom&started_at=gte.${encodeURIComponent(since)}&started_at=lte.${encodeURIComponent(new Date().toISOString())}`
+  );
+  const staff = coaches.flatMap(coach => [coach.email, ...(coach.alternate_emails ?? [])]);
+  const audit = identifyOnboardingCandidates(calls.map(call => ({
+    ...call, day: new Date(call.started_at).toLocaleDateString("en-CA", { timeZone: "America/Bogota" }),
+  })), await readClients(), staff, { requireSpeaker: true });
+  let created = 0;
+  for (const candidate of audit.candidates) {
+    const clientId = await sb("rpc/create_client_from_onboarding", {
+      method: "POST",
+      body: JSON.stringify({
+        p_name: candidate.name, p_email: candidate.email,
+        p_recordings: candidate.recordings.map(record => record.recordingId),
+        p_primary_recording: primaryOnboardingRecording(candidate.recordings, coaches),
+      }),
+    });
+    if (clientId) created++;
+  }
+  console.log(`Onboarding: ${created} fichas nuevas; ${audit.review.length + audit.candidates.length - created} casos por revisar.`);
 }
 
 async function readClients() {
@@ -581,6 +608,7 @@ async function main() {
     console.log(`${source.key}: ${sourceMissing} grabaciones faltantes detectadas en Supabase`);
   }
 
+  await createOnboardingClients(coachList);
   const contextsUpdated = await refreshClientContexts();
   const datesUpdated = await refreshProgramDates(masterClients);
   const statusesSynced = await syncProgramStatuses();
