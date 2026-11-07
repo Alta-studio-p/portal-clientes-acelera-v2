@@ -21,7 +21,7 @@ async function run(options = {}) {
     const query = strings.join('?');
     calls.push(query);
     if (query.includes('client_registration_limits')) return [{ key: '', attempts: options.rateLimited ? 100 : 1 }];
-    if (query.startsWith('select id::text')) return options.unknown ? [] : Array.from({ length: options.duplicate ? 2 : 1 }, () => ({ id: 'client-id', email, full_name: 'Client', profile_id: options.mismatch ? 'other' : options.pending ? user.id : null }));
+    if (query.includes('from public.clients where lower(trim(coalesce(email, onboarding_email)))')) return options.unknown ? [] : Array.from({ length: options.duplicate ? 2 : 1 }, () => ({ id: 'client-id', email: options.onboarding ? null : email, full_name: 'Client', profile_id: options.mismatch ? 'other' : options.pending && !options.onboarding ? user.id : null }));
     if (query.includes('with eligible')) return options.bindingFailed || options.linkedElsewhere ? [] : [{ id: 'client-id' }];
     if (query.includes('select role, email')) return options.staff ? [{ role: 'admin', email }] : options.noProfile ? [] : [{ role: 'client', email }];
     if (query.includes("role <> 'client'")) return options.conflict || options.staff ? [{ id: 'conflict' }] : [];
@@ -56,6 +56,13 @@ assert.ok(happy.calls.includes('signin'));
 assert.ok(happy.calls.includes('redirect:/portal'));
 assert.ok(!happy.calls.includes('send'));
 assert.equal(happy.result.error, null);
+for (const options of [{ onboarding: true, newUser: true }, { onboarding: true, pending: true }]) {
+  const { result, calls } = await run(options);
+  assert.equal(result.error, null);
+  assert.ok(calls.includes(options.newUser ? 'create' : 'claim'));
+  assert.ok(calls.includes('redirect:/portal'));
+  assert.ok(!calls.includes('send'));
+}
 for (const blocked of [
   { unknown: true }, { duplicate: true }, { conflict: true }, { mismatch: true },
   { staff: true }, { linkedElsewhere: true }, { rateLimited: true },

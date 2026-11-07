@@ -19,6 +19,7 @@ export async function requestClientRegistration(_previous: RegistrationState, fo
   if (password.length < 10 || password.length > 128) return { error: 'Usa una contraseña de entre 10 y 128 caracteres.', message: null };
   if (Buffer.byteLength(password, 'utf8') > 72) return { error: 'La contraseña es demasiado larga. Usa una más corta.', message: null };
   if (password !== String(form.get('confirmPassword') ?? '')) return { error: 'Las contraseñas no coinciden.', message: null };
+  if (email.endsWith('@joinaceleratalent.com')) return { error: unavailable, message: null };
   try {
     const sql = getSql();
     const secret = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SECRET_KEY;
@@ -40,12 +41,19 @@ export async function requestClientRegistration(_previous: RegistrationState, fo
     if (limits.some(row => Number(row.attempts) > (row.key === hash('email:' + email) ? 3 : 15))) {
       return { error: 'Demasiados intentos. Intenta más tarde.', message: null };
     }
-    const clients = await sql`select id::text, profile_id::text, email, full_name from public.clients where lower(trim(email)) = ${email}`;
+    const clients = await sql`
+      select id::text, profile_id::text, email, full_name
+      from public.clients where lower(trim(coalesce(email, onboarding_email))) = ${email}
+    `;
     if (clients.length !== 1) return { error: unavailable, message: null };
     const client = clients[0];
     const conflicts = await sql`
       select id from public.profiles where lower(trim(email)) = ${email} and role <> 'client'
       union all select id from public.coaches where lower(trim(email)) = ${email}
+        or exists (select 1 from unnest(alternate_emails) e where lower(trim(e)) = ${email})
+      union all select id from public.clients where id <> ${client.id}::uuid
+        and (lower(trim(email)) = ${email} or lower(trim(onboarding_email)) = ${email}
+          or exists (select 1 from unnest(alternate_emails) e where lower(trim(e)) = ${email}))
     `;
     if (conflicts.length) return { error: unavailable, message: null };
     const admin = await createAdminClient();
@@ -57,7 +65,8 @@ export async function requestClientRegistration(_previous: RegistrationState, fo
       if (user || data.users.length < 1000) break;
     }
     if (user) {
-      if (user.email_confirmed_at || user.last_sign_in_at || client.profile_id !== user.id) return { error: unavailable, message: null };
+      if (user.email_confirmed_at || user.last_sign_in_at ||
+        (client.profile_id ? client.profile_id !== user.id : client.email !== null)) return { error: unavailable, message: null };
       const completed = await completePendingInvitation(user.id, String(client.id), email, password);
       if (!completed) return { error: unavailable, message: null };
     } else {
@@ -68,11 +77,18 @@ export async function requestClientRegistration(_previous: RegistrationState, fo
     const linked = await sql`
       with eligible as (
         select id from public.clients where id = ${client.id}::uuid
-          and lower(trim(email)) = ${email} and (profile_id is null or profile_id = ${user.id}::uuid)
-          and (select count(*) from public.clients where lower(trim(email)) = ${email}) = 1
-          and not exists (select 1 from public.clients where profile_id = ${user.id}::uuid and id <> ${client.id}::uuid)
-          and not exists (select 1 from public.coaches where profile_id = ${user.id}::uuid or lower(trim(email)) = ${email})
-          and not exists (select 1 from public.profiles where lower(trim(email)) = ${email} and role <> 'client')
+          and lower(trim(coalesce(email, onboarding_email))) = ${email} and profile_id is null
+          and not exists (
+            select 1 from public.clients other where other.id <> ${client.id}::uuid
+              and (other.profile_id = ${user.id}::uuid or lower(trim(other.email)) = ${email}
+                or lower(trim(other.onboarding_email)) = ${email}
+                or exists (select 1 from unnest(other.alternate_emails) e where lower(trim(e)) = ${email}))
+          )
+          and not exists (
+            select 1 from public.coaches where profile_id = ${user.id}::uuid or lower(trim(email)) = ${email}
+              or exists (select 1 from unnest(alternate_emails) e where lower(trim(e)) = ${email})
+          )
+          and not exists (select 1 from public.profiles where lower(trim(email)) = ${email} and id <> ${user.id}::uuid)
         for update
       ), profile as (
         insert into public.profiles (id, email, full_name, role)
@@ -81,7 +97,7 @@ export async function requestClientRegistration(_previous: RegistrationState, fo
           where profiles.role = 'client' and lower(trim(profiles.email)) = ${email}
         returning id
       )
-      update public.clients set profile_id = profile.id, updated_at = now()
+      update public.clients set profile_id = profile.id, email = coalesce(clients.email, ${email}), updated_at = now()
       from profile, eligible where clients.id = eligible.id returning clients.id
     `;
     if (!linked.length) return { error: unavailable, message: null };

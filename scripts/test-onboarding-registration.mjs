@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { createHmac } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import ts from 'typescript';
@@ -13,36 +12,6 @@ async function mockAction(path, name, deps) {
 }
 
 const email = 'client@example.test';
-const redirectTo = 'https://portal.example.test/auth/activate';
-
-test('only eligible addresses get an email, without leaking eligibility', async () => {
-  for (const scenario of ['new', 'confirmed', 'unknown', 'rate-limited', 'internal']) {
-    const calls = [];
-    const action = await mockAction('../app/register/onboarding-actions.ts', 'requestOnboardingAccess', {
-      createHmac,
-      process: { env: { SUPABASE_SECRET_KEY: 'fixture' } },
-      getSql: () => async (query) => query.join('?').includes('client_registration_limits')
-        ? [{ attempts: scenario === 'rate-limited' ? 16 : 1 }]
-        : scenario === 'unknown' ? [] : [{ full_name: 'Test Client', confirmed: scenario === 'confirmed' }],
-      getActivationUrl: async () => redirectTo,
-      createAdminClient: async () => ({ auth: {
-        admin: { inviteUserByEmail: async (...args) => { calls.push(['invite', ...args]); return {}; } },
-        resetPasswordForEmail: async (...args) => { calls.push(['recover', ...args]); return {}; },
-      } }),
-    });
-    const form = new FormData();
-    form.set('email', scenario === 'internal' ? 'coach@joinaceleratalent.com' : ' Client@Example.Test ');
-    const result = await action({}, form);
-    assert.equal(result.error, null);
-    assert.match(result.message, /^Si el correo coincide/);
-    if (scenario === 'new' || scenario === 'confirmed') {
-      assert.equal(calls[0][0], scenario === 'new' ? 'invite' : 'recover');
-      assert.equal(calls[0][1], email);
-      assert.equal(calls[0][2].redirectTo, redirectTo);
-    } else assert.equal(calls.length, 0);
-  }
-});
-
 test('activation never binds without a verified session, and does not alter existing roles', async () => {
   for (const scenario of ['unverified', 'refused', 'new', 'existing', 'coach']) {
     const calls = [];

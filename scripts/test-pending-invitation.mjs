@@ -16,9 +16,9 @@ try{
         is_sso_user boolean default false,is_anonymous boolean default false,updated_at timestamptz,
         confirmation_token text default 'old-invite',recovery_token text default 'old-recovery',raw_user_meta_data jsonb);
       create temp table auth_identities(user_id uuid,provider text,identity_data jsonb default '{}',updated_at timestamptz);
-      create temp table clients(id uuid,profile_id uuid,email text);
+      create temp table clients(id uuid,profile_id uuid,email text,onboarding_email text,alternate_emails text[],updated_at timestamptz);
       create temp table profiles(id uuid,email text,role text);
-      create temp table coaches(id uuid,profile_id uuid,email text);
+      create temp table coaches(id uuid,profile_id uuid,email text,alternate_emails text[]);
     `);
     const db=(strings,...values)=>tx.query(strings.reduce((s,part,i)=>s+(i?`$${i}`:'')+part,'')
       .replaceAll('auth.users','pg_temp.auth_users').replaceAll('auth.identities','pg_temp.auth_identities').replaceAll('public.','pg_temp.'),values);
@@ -27,7 +27,7 @@ try{
       await tx.query('truncate pg_temp.auth_users,pg_temp.auth_identities,pg_temp.clients,pg_temp.profiles,pg_temp.coaches');
       await tx.query('insert into pg_temp.auth_users(id,email) values($1,$2)',[uid,email]);
       await tx.query("insert into pg_temp.auth_identities(user_id,provider) values($1,'email')",[uid]);
-      await tx.query('insert into pg_temp.clients values($1,$2,$3)',[cid,uid,email]);
+      await tx.query('insert into pg_temp.clients(id,profile_id,email) values($1,$2,$3)',[cid,uid,email]);
       await tx.query("insert into pg_temp.profiles values($1,$2,'client')",[uid,email]);
     }
     await reset();
@@ -48,14 +48,19 @@ try{
       "update pg_temp.profiles set role='admin'",
       "update pg_temp.profiles set email='other@example.invalid'",
       'update pg_temp.clients set profile_id=null',
-      'insert into pg_temp.clients select gen_random_uuid(),profile_id,email from pg_temp.clients',
-      'insert into pg_temp.coaches select gen_random_uuid(),id,email from pg_temp.profiles',
+      'insert into pg_temp.clients(id,profile_id,email) select gen_random_uuid(),profile_id,email from pg_temp.clients',
+      'insert into pg_temp.coaches(id,profile_id,email) select gen_random_uuid(),id,email from pg_temp.profiles',
       'delete from pg_temp.auth_identities',
     ]){
       await reset();await tx.query(change);
       assert.equal(await claim(uid,cid,email,'must-not-overwrite'),false,change);
       assert.equal((await tx.query('select email_confirmed_at is not null confirmed from pg_temp.auth_users'))[0].confirmed,change.includes('email_confirmed_at=now()'));
     }
+    await reset();
+    await tx.query('update pg_temp.clients set onboarding_email=email, email=null, profile_id=null');
+    assert.equal(await claim(uid,cid,email,'fixture-password-123'),true);
+    assert.deepEqual((await tx.query('select profile_id::text,email from pg_temp.clients'))[0],{profile_id:uid,email});
+    assert.equal(await claim(uid,cid,email,'must-not-overwrite'),false);
     throw rollback;
   });
 }catch(error){if(error!==rollback)throw error;console.log('PASS: real PostgreSQL fixtures, bcrypt verification, same-account activation, one-time claim, protected existing passwords and eligibility guards. Rolled back; no real accounts changed.');}

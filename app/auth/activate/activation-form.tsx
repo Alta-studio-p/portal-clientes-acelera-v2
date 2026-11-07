@@ -50,7 +50,7 @@ export function ActivationForm() {
   }, []);
   if (error) return <div>
     <p role="alert" className="text-sm text-[var(--danger)]">{error}</p>
-    <Link href="/register" className="mt-4 flex min-h-11 items-center text-sm text-accent hover:underline">Solicitar otro enlace de onboarding</Link>
+    <Link href="/register" className="mt-4 flex min-h-11 items-center text-sm text-accent hover:underline">Crear mi cuenta</Link>
     <Link href="/login/forgot-password" className="flex min-h-11 items-center text-sm text-accent hover:underline">Restablecer mi contraseña</Link>
   </div>;
   if (!ready) return <p role="status" className="text-sm text-muted">Verificando tu acceso…</p>;
