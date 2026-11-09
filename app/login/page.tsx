@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getSessionProfile } from "@/lib/auth";
 import { loginDestination } from '@/lib/login-destination';
 import { LoginForm } from "./login-form";
+import { AuthFrame } from '@/components/auth-frame';
 
 export default async function LoginPage({
   searchParams,
@@ -17,16 +18,7 @@ export default async function LoginPage({
   }
 
   return (
-    <div className="flex flex-1 items-center justify-center px-4 py-16">
-      <div className="w-full max-w-sm">
-        <div className="mb-8 text-center">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo-icon.png" alt="Acelera Talent" className="mx-auto mb-4 h-10 w-10 object-contain" />
-          <h1 className="text-lg font-semibold text-foreground">Portal Clientes Acelera</h1>
-          <p className="mt-1 text-sm text-muted">Acceso privado de coaching</p>
-        </div>
-
-        <div className="rounded-xl border border-border bg-surface p-6 shadow-sm">
+    <AuthFrame title="Portal Clientes Acelera" description="Acceso privado de coaching" footer="¿Problemas para entrar? Escribe a admin@joinaceleratalent.com">
           <LoginForm redirectTo={params.redirectTo} />
           <p className="mt-5 text-center text-sm text-muted">¿Primera vez aquí? <Link href="/register" className="text-accent hover:underline">Crear cuenta de cliente</Link></p>
           {params.error === "no_profile" && (
@@ -34,12 +26,6 @@ export default async function LoginPage({
               Tu cuenta no tiene un perfil asociado. Contacta a Acelera.
             </p>
           )}
-        </div>
-
-        <p className="mt-6 text-center text-xs text-muted-2">
-          ¿Problemas para entrar? Escribe a admin@joinaceleratalent.com
-        </p>
-      </div>
-    </div>
+    </AuthFrame>
   );
 }

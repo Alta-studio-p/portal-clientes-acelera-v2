@@ -17,7 +17,7 @@ const PARTICIPANT_ROLE_LABELS: Record<string, string> = {
 };
 
 const pillButton =
-  "inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3.5 py-2 text-xs font-semibold text-foreground transition hover:bg-surface-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent";
+  "inline-flex min-h-10 items-center gap-1.5 rounded-md border border-border bg-surface px-3.5 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-surface-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent";
 
 export function CallReader({
   call,
@@ -104,12 +104,12 @@ export function CallReader({
 
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-8 lg:px-10 lg:py-10">
         <div className="mx-auto max-w-[760px]">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-2">
+          <p className="text-xs font-medium text-accent">
             Sesión {position} de {total}
           </p>
-          <h1 className="mt-2 text-[32px] font-extrabold leading-tight tracking-tight text-foreground lg:text-[36px]">
+          <h2 className="mt-3 break-words text-2xl font-semibold leading-snug text-foreground [overflow-wrap:anywhere]">
             {displayCallTitle(call)}
-          </h1>
+          </h2>
           <p className="mt-2 text-sm text-muted">
             {formatDate(call.started_at)} · {formatTime(call.started_at)} ·{" "}
             {formatDuration(call.duration_seconds)}

@@ -3,6 +3,18 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { NavItem } from "@/components/app-shell";
+import { LayoutDashboard, TrendingUp, CalendarDays, Users, Phone, Video, UserRound, CircleHelp } from "lucide-react";
+
+function navIcon(href: string) {
+  if (href.endsWith('/progress')) return TrendingUp;
+  if (href.endsWith('/calendar')) return CalendarDays;
+  if (href.endsWith('/masterclasses')) return Video;
+  if (href.endsWith('/fees')) return Phone;
+  if (href.endsWith('/unassigned')) return CircleHelp;
+  if (href.endsWith('/coaches')) return Users;
+  if (href.startsWith('/portal')) return UserRound;
+  return LayoutDashboard;
+}
 
 function isActive(pathname: string, href: string): boolean {
   if (href === "/admin" || href === "/coach" || href === "/portal" || /^\/preview\/coaches\/[^/]+$/.test(href)) {
@@ -30,6 +42,7 @@ export function NavLinks({
     <nav className={className}>
       {items.map((item) => {
         const active = isActive(pathname, item.href);
+        const Icon = navIcon(item.href);
         return (
           <Link
             key={item.href}
@@ -37,7 +50,7 @@ export function NavLinks({
             aria-current={active ? "page" : undefined}
             className={`${linkClassName} ${active ? activeClassName : inactiveClassName}`}
           >
-            {item.label}
+            <Icon size={16} strokeWidth={1.8} aria-hidden="true" className="shrink-0" />{item.label}
           </Link>
         );
       })}

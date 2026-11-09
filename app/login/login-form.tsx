@@ -23,7 +23,7 @@ export function LoginForm({ redirectTo }: { redirectTo?: string }) {
           type="text"
           required
           autoComplete="username"
-          className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+          className="min-h-11 w-full rounded-md border border-border bg-surface px-3 py-2 text-base text-foreground outline-none focus:border-accent focus:ring-2 focus:ring-accent/15"
           placeholder="tu usuario o correo"
         />
       </div>
@@ -43,7 +43,7 @@ export function LoginForm({ redirectTo }: { redirectTo?: string }) {
           type="password"
           required
           autoComplete="current-password"
-          className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+          className="min-h-11 w-full rounded-md border border-border bg-surface px-3 py-2 text-base text-foreground outline-none focus:border-accent focus:ring-2 focus:ring-accent/15"
           placeholder="••••••••"
         />
       </div>
@@ -57,7 +57,7 @@ export function LoginForm({ redirectTo }: { redirectTo?: string }) {
       <button
         type="submit"
         disabled={pending}
-        className="w-full rounded-md bg-accent px-3 py-2 text-sm font-medium text-white transition hover:bg-accent-hover disabled:opacity-60"
+        className="min-h-11 w-full rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent-hover disabled:opacity-60"
       >
         {pending ? "Ingresando…" : "Ingresar"}
       </button>

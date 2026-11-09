@@ -20,7 +20,7 @@ export function ClientDatesSettings({
         Fechas del programa
       </summary>
 
-      <div className="absolute right-0 z-20 mt-2 w-[min(320px,calc(100vw-2rem))] rounded-2xl border border-border bg-surface p-4 text-left shadow-lg">
+      <div className="absolute right-0 z-20 mt-2 w-[min(320px,calc(100vw-2rem))] rounded-lg bg-surface p-4 text-left shadow-[0_8px_30px_-8px_rgba(25,40,48,0.24)] ring-1 ring-border">
         <ClientDatesForm clientId={clientId} startDate={startDate} endDate={endDate} />
       </div>
     </details>

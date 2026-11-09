@@ -29,7 +29,7 @@ export function MobileCallDrawer({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex h-11 w-full items-center justify-center gap-2 rounded-full border border-border bg-surface text-sm font-semibold text-foreground transition hover:bg-surface-muted"
+        className="flex h-11 w-full items-center justify-center gap-2 rounded-md border border-border bg-surface text-sm font-semibold text-foreground transition-colors hover:bg-surface-muted"
       >
         <ListFilter size={18} strokeWidth={2} aria-hidden="true" />
         Seleccionar llamada
@@ -43,7 +43,7 @@ export function MobileCallDrawer({
             onClick={() => setOpen(false)}
             className="absolute inset-0 bg-foreground/30 transition"
           />
-          <div className="absolute inset-x-0 bottom-0 flex max-h-[85vh] flex-col rounded-t-[26px] border border-border bg-surface shadow-[0_-20px_60px_-20px_rgba(15,23,42,0.35)]">
+          <div className="absolute inset-x-0 bottom-0 flex max-h-[85dvh] flex-col rounded-t-lg bg-surface pb-[env(safe-area-inset-bottom)] shadow-[0_-10px_40px_-12px_rgba(25,40,48,0.24)]">
             <div className="flex shrink-0 items-center justify-end px-3 pt-3">
               <button
                 type="button"

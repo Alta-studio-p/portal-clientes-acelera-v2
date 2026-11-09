@@ -8,10 +8,10 @@ import { getProgramAlert } from "@/lib/program-dates";
 
 function ClientsTable({ clients, basePath }: { clients: CoachClientRow[]; basePath: string }) {
   return (
-    <Card className="overflow-x-auto p-0">
+    <Card className="data-table overflow-x-auto p-0">
       <table className="w-full min-w-[640px] text-sm">
         <thead>
-          <tr className="border-b border-border text-left text-xs font-medium text-muted-2">
+          <tr className="border-b border-border bg-surface-muted/60 text-left text-xs font-medium text-muted">
             <th className="px-4 py-3">Cliente</th>
             <th className="px-4 py-3">Estado</th>
             <th className="px-4 py-3">Fecha final</th>
@@ -25,7 +25,7 @@ function ClientsTable({ clients, basePath }: { clients: CoachClientRow[]; basePa
             return (
               <tr
                 key={client.id}
-                className={`hover:bg-surface-muted ${alert ? "border-l-4 border-l-[--alert-warning]" : ""}`}
+                className={`transition-colors hover:bg-accent-soft/35 ${alert ? "bg-[var(--alert-warning-bg)]/30" : ""}`}
               >
                 <td className="px-4 py-3">
                   <Link href={`${basePath}/clients/${client.id}`} className="block">

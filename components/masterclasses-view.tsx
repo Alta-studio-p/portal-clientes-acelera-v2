@@ -19,7 +19,7 @@ export function MasterclassesView({ classes }: { classes: Masterclass[] }) {
         {schedule.map((item) => {
           const cancelled = item.status === "cancelled";
           const liveUrl = cancelled ? null : masterclassLiveUrl(item.live_url ?? "");
-          return <li key={item.id} className="flex flex-wrap items-center justify-between gap-4 py-4">
+          return <li key={item.id} className="flex flex-wrap items-center justify-between gap-4 py-6">
             <div className="min-w-0 flex-1 basis-60">
               <div className="mb-1 flex flex-wrap gap-x-3 gap-y-1 text-xs font-medium">
                 {cancelled ? <span className="text-red-700">Cancelada</span> : <>
@@ -44,8 +44,9 @@ export function MasterclassesView({ classes }: { classes: Masterclass[] }) {
       {recordings.length ? <ul className="divide-y divide-border border-y border-border">
         {recordings.map((item) => {
           const url = masterclassDriveUrl(item.drive_url ?? "");
-          return <li key={item.id} className="flex flex-wrap items-center justify-between gap-4 py-4">
-            <div className="min-w-0 flex-1 basis-60">
+          return <li key={item.id} className="flex flex-wrap items-center justify-between gap-4 py-6">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent" aria-hidden="true"><Video size={21} strokeWidth={1.6} /></span>
+            <div className="min-w-0 flex-1 basis-52">
               <h3 className="break-words font-medium">{item.title}</h3>
               <p className="mt-1 text-sm text-muted"><time dateTime={item.starts_at}>{formatMasterclassDate(item.starts_at, false)}</time></p>
               {item.description && <p className="mt-2 whitespace-pre-wrap break-words text-sm text-muted">{item.description}</p>}

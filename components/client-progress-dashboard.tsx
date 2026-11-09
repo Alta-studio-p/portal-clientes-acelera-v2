@@ -145,8 +145,13 @@ export function ClientProgressDashboard({ clients, categories, coaches = [], tod
   const reset = () => { setCoach(''); setEstado('activos'); setMes(''); setSearch(''); setCategory(''); setSessions(''); setSort('entry'); setIncludeSecondary(false); };
   const openCoach = (id: string) => { setCoach(id); setVista('lista'); };
   const stats = summarize(visible, finished);
-  return <div className="space-y-5">
-    <header><h1 className="text-2xl font-semibold tracking-tight">Progreso de clientes</h1></header>
+  return <div className="space-y-4">
+    <header><h1 className="text-2xl font-semibold leading-tight">Progreso de clientes</h1></header>
+
+    <div className="grid grid-cols-2 gap-x-6 gap-y-1 lg:grid-cols-4">
+      {([['Clientes', visible.length], ['Menos de 12 sesiones', stats.below], ['12 sesiones o más', stats.complete], ['Superan 12 sesiones', stats.over]] as const).map(([label, count]) =>
+        <MetricCard key={label} label={label} value={<span className={label === 'Superan 12 sesiones' && count ? 'text-red-700' : ''}>{count}</span>} />)}
+    </div>
 
     {isAdmin && <div className="flex flex-wrap items-center justify-between gap-3">
       <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2">
@@ -157,15 +162,12 @@ export function ClientProgressDashboard({ clients, categories, coaches = [], tod
       <SegmentedControl hideLabel compact label="Vista" value={vista} onChange={v => setVista(v as Vista)} options={[{ value: 'resumen', label: 'Resumen por coach' }, { value: 'lista', label: 'Lista de clientes' }]} />
     </div>}
 
-    <SegmentedControl hideLabel compact label="Estado de los clientes" value={estado} onChange={v => setEstado(v as Estado)}
+    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
+      <SegmentedControl hideLabel compact label="Estado de los clientes" value={estado} onChange={v => setEstado(v as Estado)}
       options={[{ value: 'activos', label: `Activos (${counts.estado('activos')})` }, { value: 'finalizados', label: `Finalizados (${counts.estado('finalizados')})` }, { value: 'todos', label: `Todos (${counts.estado('todos')})` }]} />
 
-    <PeriodBar label="Mes de inicio:" month={mes} currentMonth={currentMonth()} months={months} allLabel="Todos los meses" previousTitle="Mes anterior" nextTitle="Mes siguiente" onChange={setMes}
+    <PeriodBar compact label="Mes de inicio:" month={mes} currentMonth={currentMonth()} months={months} allLabel="Todos los meses" previousTitle="Mes anterior" nextTitle="Mes siguiente" onChange={setMes}
       actions={<button onClick={reset} className={pillIconButton} title="Limpiar filtros" aria-label="Limpiar filtros"><X size={16} /></button>} />
-
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-      {([['Clientes', visible.length], ['Menos de 12 sesiones', stats.below], ['12 sesiones o más', stats.complete], ['Superan 12 sesiones', stats.over]] as const).map(([label, count]) =>
-        <MetricCard key={label} label={label} value={<span className={label === 'Superan 12 sesiones' && count ? 'text-red-700' : ''}>{count}</span>} />)}
     </div>
 
     {vista === 'resumen' && isAdmin ? <section aria-label="Resumen por coach">
@@ -181,7 +183,7 @@ export function ClientProgressDashboard({ clients, categories, coaches = [], tod
         </table>
       </TableCard>
     </section> : <section aria-label="Lista de clientes" className="space-y-3">
-      <div className="flex flex-wrap items-end gap-3" role="search" aria-label="Filtros de progreso">
+      <div className="flex flex-wrap items-end gap-3 border-b border-border pb-5 [&>label]:w-full sm:[&>label]:w-auto [&_select]:w-full [&_select]:max-w-full" role="search" aria-label="Filtros de progreso">
         <label className="flex min-w-48 flex-1 flex-col gap-1 text-xs text-muted">Cliente<div className="relative"><Search className="absolute left-3 top-3 text-muted" size={16} /><input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Nombre o correo" className={`${pillField} w-full pl-9`} /></div></label>
         <label className="flex flex-col gap-1 text-xs text-muted">Estado<select value={category} onChange={e => setCategory(e.target.value)} className={`${pillField} max-w-52`}><option value="">Todos los estados</option><option value="program:active">Activo</option><option value="program:extension">En extensión</option><option value="program:inactive">Inactivo</option><option value="none">Sin etiquetas</option>{categories.map(c => <option key={c.id} value={c.id}>{c.label}{!c.active ? ' (retirado)' : ''}</option>)}</select></label>
         <label className="flex flex-col gap-1 text-xs text-muted">Sesiones<select value={sessions} onChange={e => setSessions(e.target.value)} className={pillField}><option value="">Todas</option><option value="progress">Menos de 12</option><option value="complete">12 o más</option><option value="excess">Más de 12 · alerta</option></select></label>
@@ -199,7 +201,7 @@ export function ClientProgressDashboard({ clients, categories, coaches = [], tod
               {isAdmin && <td className="max-w-48 px-5 py-4 text-muted"><PrimaryCoachEditor key={`${client.id}-${client.primaryCoachId}`} client={client} coaches={coachOptions} supportIds={supportIds} readOnly={readOnly} />{client.alsoCoaches.length > 0 && <p className="mt-0.5 text-xs text-muted-2">También: {client.alsoCoaches.join(', ')}</p>}</td>}
               <td className="px-5 py-5"><div className="flex w-40 items-center gap-3"><div role="progressbar" aria-label={`Progreso de ${client.name}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={p.percent} aria-valuetext={`${p.sessions} de ${SESSION_LIMIT} sesiones`} className="h-2 flex-1 overflow-hidden rounded-full bg-surface-muted"><div className={`h-full ${p.excess ? 'bg-red-600' : 'bg-accent'}`} style={{ width: `${p.percent}%` }} /></div><span className={`w-10 text-right font-semibold tabular-nums ${p.excess ? 'text-red-700' : ''}`}>{p.percent}%</span></div></td>
               <td className={`px-5 py-5 tabular-nums ${p.excess ? 'font-semibold text-red-700' : 'text-muted'}`}>{p.sessions} / {SESSION_LIMIT}</td>
-              <td className="px-5 py-4 text-muted">{readOnly ? formatDate(client.startDate) : <RowEditor key={`${client.id}-start-${client.startDate}`} client={client} />}</td>
+              <td className="whitespace-nowrap px-5 py-4 text-muted">{readOnly ? formatDate(client.startDate) : <RowEditor key={`${client.id}-start-${client.startDate}`} client={client} />}</td>
               <td className="whitespace-nowrap px-5 py-5 text-muted">{formatDate(client.endDate ?? progressEndDate(client.startDate))}</td>
               <td className="whitespace-nowrap px-5 py-5 text-muted">{formatDate(client.lastCall)}</td>
               <td className="px-5 py-4"><ClientStateSelector client={client} categories={categories} isAdmin={isAdmin} readOnly={readOnly} status={statusOf(client)} phaseTag={phases.get(client.id)?.tag ?? null} /></td>

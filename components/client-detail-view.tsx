@@ -90,8 +90,8 @@ export function ClientDetailView({
 
       <MobileCallDrawer calls={listCalls} selectedCallId={selectedCall?.id ?? null} hrefBase={callHrefBase} />
 
-      <div className="mb-6 overflow-hidden rounded-[26px] border border-border/60 bg-surface shadow-[0_30px_80px_-45px_rgba(15,23,42,0.35)] lg:flex lg:h-[72vh] lg:min-h-[560px]">
-        <div className="hidden shrink-0 border-border/60 bg-surface-muted/60 lg:flex lg:w-[340px] lg:flex-col lg:border-r">
+      <div className="mb-6 overflow-hidden rounded-lg border border-border bg-surface lg:flex lg:h-[74vh] lg:min-h-[560px]">
+        <div className="hidden shrink-0 border-border bg-background lg:flex lg:w-[300px] lg:flex-col lg:border-r xl:w-[320px]">
           <CallListPanel calls={listCalls} selectedCallId={selectedCall?.id ?? null} hrefBase={callHrefBase} />
         </div>
 
