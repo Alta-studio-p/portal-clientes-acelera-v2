@@ -4,7 +4,7 @@ import { Eye } from "lucide-react";
 import { getClientDetail } from "@/lib/data/client-detail";
 import { getSql } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
-import { ClientDetailView } from "@/components/client-detail-view";
+import { StaffClientWorkspace } from "@/components/staff-client-workspace";
 import { AdminClientSettings } from "./admin-client-settings";
 import { InviteClientButton } from "./invite-client-button";
 
@@ -13,11 +13,11 @@ export default async function AdminClientDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ call?: string; drive?: string; status?: string }>;
+  searchParams: Promise<{ call?: string; drive?: string; status?: string;section?:string }>;
 }) {
   await requireRole(["admin"]);
   const { id } = await params;
-  const { call, drive, status } = await searchParams;
+  const { call, drive, status,section } = await searchParams;
 
   const client = await getClientDetail(id);
   if (!client) notFound();
@@ -27,7 +27,8 @@ export default async function AdminClientDetailPage({
   const invitationEmail = client.email ?? (intake?.onboarding_email as string | null | undefined) ?? null;
 
   return (
-    <ClientDetailView
+    <StaffClientWorkspace
+      section={section}
       client={client}
       selectedCallId={call}
       callHrefBase={`/admin/clients/${id}`}

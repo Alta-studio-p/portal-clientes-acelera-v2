@@ -6,7 +6,7 @@ import { getCoachFees } from '@/lib/data/coach-fees';
 import { validMonth } from '@/lib/coach-fees';
 import { CoachClientsView } from '@/components/coach-clients-view';
 import { CoachFeesDashboard } from '@/components/coach-fees-dashboard';
-import { ClientDetailView } from '@/components/client-detail-view';
+import { StaffClientWorkspace } from '@/components/staff-client-workspace';
 import { CallAssignmentQueue } from '@/components/call-assignment-queue';
 import { PageHeader } from '@/components/ui';
 import { ClientProgressDashboard } from '@/components/client-progress-dashboard';
@@ -14,7 +14,7 @@ import { getStaffProgress } from '@/lib/data/client-progress';
 
 export default async function CoachPreviewPage({ params, searchParams }: {
   params: Promise<{ id: string; view?: string[] }>;
-  searchParams: Promise<{ q?: string; month?: string; call?: string }>;
+  searchParams: Promise<{ q?: string; month?: string; call?: string;section?:string }>;
 }) {
   const { id, view = [] } = await params;
   // Check here as well as in the layout: nested pages can render independently.
@@ -39,7 +39,7 @@ export default async function CoachPreviewPage({ params, searchParams }: {
     if (!assigned.some(c => c.id === view[1])) notFound();
     const client = await getClientDetail(view[1]);
     if (!client) notFound();
-    return <ClientDetailView client={client} selectedCallId={query.call} callHrefBase={`${base}/clients/${client.id}`} backHref={base} />;
+    return <StaffClientWorkspace client={client} section={query.section} readOnly selectedCallId={query.call} callHrefBase={`${base}/clients/${client.id}`} backHref={base} />;
   }
   notFound();
 }

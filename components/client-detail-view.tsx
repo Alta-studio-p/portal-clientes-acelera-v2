@@ -26,6 +26,7 @@ export function ClientDetailView({
   backHref,
   showNotes = false,
   showProgramStatus = true,
+  navigation,
 }: {
   client: ClientDetail;
   selectedCallId?: string;
@@ -34,6 +35,7 @@ export function ClientDetailView({
   backHref?: string;
   showNotes?: boolean;
   showProgramStatus?: boolean;
+  navigation?: ReactNode;
 }) {
   // client.calls viene ordenado started_at desc (más reciente primero). La
   // posición de sesión se numera cronológicamente ascendente (1 = la más
@@ -79,6 +81,7 @@ export function ClientDetailView({
   return (
     <div>
       <ClientHeader client={client} backHref={backHref} headerActions={headerActions} showProgramStatus={showProgramStatus} />
+      {navigation}
 
       <ProfileStrip contextSummary={client.context_summary} />
 
