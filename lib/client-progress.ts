@@ -8,6 +8,8 @@ export function validProgressDate(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) && value >= '1900-01-01' && value <= '2200-12-31' && Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 export interface ProgressClient {
+  display_email?: string | null;
+  registration_email?: string | null;
   id: string; name: string; email: string; startDate: string | null; lastCall: string | null;
   calls: number; coaches: string[]; coachIds: string[]; categoryIds: string[]; operationalStatus: string;
   /** Posición en la hoja de ingresos (1 = el primero que entró). */

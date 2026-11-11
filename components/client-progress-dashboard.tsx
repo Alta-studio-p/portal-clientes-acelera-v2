@@ -9,6 +9,7 @@ import { ClientStateSelector } from '@/components/client-state-selector';
 import { programPhase, storedStatusFor } from '@/lib/program-phase.mjs';
 import { MetricCard, PeriodBar, SegmentedControl, TableCard, pillField, pillIconButton, tableBody, tableFoot, tableHead, tableHeadCell, tableRow } from '@/components/page-kit';
 import { currentMonth } from '@/lib/coach-fees';
+import { visibleClientEmail } from '@/lib/client-contact.mjs';
 import { sessionProgress, SESSION_LIMIT, progressEndDate, formatProgressDate as formatDate, type ProgressClient, type ProgressCategory, type ProgressCoach } from '@/lib/client-progress';
 
 const initial: ProgressState = { error: null, success: false };
@@ -113,7 +114,7 @@ export function ClientProgressDashboard({ clients, categories, coaches = [], tod
   const visible = useMemo(() => clients.filter(c => {
     const p = sessionProgress(c.calls);
     return inMonth(c) && inEstado(c) && inCoach(c) &&
-      (!search || `${c.name} ${c.email}`.toLocaleLowerCase('es').includes(search.toLocaleLowerCase('es'))) &&
+      (!search || `${c.name} ${c.email??''} ${c.display_email??''}`.toLocaleLowerCase('es').includes(search.toLocaleLowerCase('es'))) &&
       (!category || (category === 'none' ? c.categoryIds.length === 0 : category.startsWith('program:') ? statusOf(c) === category.slice(8) : c.categoryIds.includes(category))) &&
       (!sessions || (sessions === 'excess' ? p.excess > 0 : sessions === 'complete' ? p.sessions >= SESSION_LIMIT : p.sessions < SESSION_LIMIT));
   }).sort((a, b) => {
@@ -197,7 +198,7 @@ export function ClientProgressDashboard({ clients, categories, coaches = [], tod
             const p = sessionProgress(client.calls);
             return <tr key={client.id} className={`align-top ${tableRow}`}>
               <td className="px-5 py-4"><Link prefetch={false} href={`${basePath}/clients/${client.id}`} className={`flex min-h-10 max-w-60 items-center gap-2 font-medium hover:underline ${p.excess ? 'text-red-700' : 'text-foreground'}`}>
-                {p.excess > 0 && <TriangleAlert size={16} className="shrink-0" aria-label="Excede 12 sesiones" />}<span className="break-words">{client.name}</span></Link>{p.excess > 0 && <p className="text-xs text-red-700">{p.excess} {p.excess === 1 ? 'sesión' : 'sesiones'} sobre el límite</p>}</td>
+                {p.excess > 0 && <TriangleAlert size={16} className="shrink-0" aria-label="Excede 12 sesiones" />}<span className="break-words">{client.name}</span></Link><p className="mt-0.5 max-w-60 break-words text-xs text-muted [overflow-wrap:anywhere]">{visibleClientEmail(client) || 'Sin correo registrado'}</p>{p.excess > 0 && <p className="text-xs text-red-700">{p.excess} {p.excess === 1 ? 'sesión' : 'sesiones'} sobre el límite</p>}</td>
               {isAdmin && <td className="max-w-48 px-5 py-4 text-muted"><PrimaryCoachEditor key={`${client.id}-${client.primaryCoachId}`} client={client} coaches={coachOptions} supportIds={supportIds} readOnly={readOnly} />{client.alsoCoaches.length > 0 && <p className="mt-0.5 text-xs text-muted-2">También: {client.alsoCoaches.join(', ')}</p>}</td>}
               <td className="px-5 py-5"><div className="flex w-40 items-center gap-3"><div role="progressbar" aria-label={`Progreso de ${client.name}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={p.percent} aria-valuetext={`${p.sessions} de ${SESSION_LIMIT} sesiones`} className="h-2 flex-1 overflow-hidden rounded-full bg-surface-muted"><div className={`h-full ${p.excess ? 'bg-red-600' : 'bg-accent'}`} style={{ width: `${p.percent}%` }} /></div><span className={`w-10 text-right font-semibold tabular-nums ${p.excess ? 'text-red-700' : ''}`}>{p.percent}%</span></div></td>
               <td className={`px-5 py-5 tabular-nums ${p.excess ? 'font-semibold text-red-700' : 'text-muted'}`}>{p.sessions} / {SESSION_LIMIT}</td>

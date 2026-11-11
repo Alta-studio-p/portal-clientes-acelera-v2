@@ -17,7 +17,7 @@ function navIcon(href: string) {
 }
 
 function isActive(pathname: string, href: string): boolean {
-  if (href === "/admin" || href === "/coach" || href === "/portal" || /^\/preview\/coaches\/[^/]+$/.test(href)) {
+  if (href === "/admin" || href === "/coach" || href === "/portal" || /^\/preview\/(coaches|clients)\/[^/]+$/.test(href)) {
     return pathname === href;
   }
   return pathname === href || pathname.startsWith(`${href}/`);

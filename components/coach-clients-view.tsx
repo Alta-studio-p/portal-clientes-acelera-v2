@@ -5,6 +5,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { ProgramAlertBadge } from "@/components/program-alert-badge";
 import { formatDate } from "@/lib/format";
 import { getProgramAlert } from "@/lib/program-dates";
+import { visibleClientEmail } from '@/lib/client-contact.mjs';
 
 function ClientsTable({ clients, basePath }: { clients: CoachClientRow[]; basePath: string }) {
   return (
@@ -30,7 +31,7 @@ function ClientsTable({ clients, basePath }: { clients: CoachClientRow[]; basePa
                 <td className="px-4 py-3">
                   <Link href={`${basePath}/clients/${client.id}`} className="block">
                     <p className="font-medium text-foreground">{client.full_name || client.email}</p>
-                    <p className="text-xs text-muted-2">{client.email}</p>
+                    <p className="break-words text-xs text-muted-2 [overflow-wrap:anywhere]">{visibleClientEmail(client) || 'Sin correo registrado'}</p>
                   </Link>
                 </td>
                 <td className="px-4 py-3">
@@ -59,7 +60,7 @@ export function CoachClientsView({ allClients, q, basePath = '/coach' }: {
   const query = q?.trim().toLowerCase();
   const clients = query
     ? allClients.filter(
-        (c) => c.full_name?.toLowerCase().includes(query) || c.email?.toLowerCase().includes(query)
+        (c) => c.full_name?.toLowerCase().includes(query) || c.email?.toLowerCase().includes(query) || c.display_email?.toLowerCase().includes(query)
       )
     : allClients;
 

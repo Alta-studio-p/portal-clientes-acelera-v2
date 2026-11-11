@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getSql } from "@/lib/db";
+import { withClientContacts, type ClientContactFields } from '@/lib/data/client-contacts';
 import type { CalendarEvent, Call, Client, Coach, ClientStatus } from "@/lib/supabase/types";
 
 export interface AdminCounts {
@@ -87,18 +88,18 @@ export async function getClientsList(filters: {
     values
   );
 
-  return rows as unknown as ClientListRow[];
+  return withClientContacts(rows as unknown as ClientListRow[]);
 }
 
 export interface CoachWithClients extends Coach {
-  clients: {
+  clients: (ClientContactFields & {
     id: string;
     full_name: string | null;
     email: string;
     status: ClientStatus;
     end_date: string | null;
     is_primary: boolean;
-  }[];
+  })[];
 }
 
 export async function getCoachesWithClients(): Promise<CoachWithClients[]> {
@@ -126,7 +127,10 @@ export async function getCoachesWithClients(): Promise<CoachWithClients[]> {
     group by coach.id
     order by coach.full_name nulls last, coach.email
   `;
-  return rows as unknown as CoachWithClients[];
+  const coaches=rows as unknown as CoachWithClients[];
+  const contacts=await withClientContacts(coaches.flatMap(coach=>coach.clients));
+  const byId=new Map(contacts.map(({id,display_email,registration_email,email_source})=>[id,{display_email,registration_email,email_source}]));
+  return coaches.map(coach=>({...coach,clients:coach.clients.map(client=>({...client,...byId.get(client.id)}))}));
 }
 
 export async function getCallsNeedingAttention(): Promise<Call[]> {

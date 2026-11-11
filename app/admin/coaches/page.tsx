@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Eye } from "lucide-react";
 import { getCoachesWithClients, getCoachCallCounts } from "@/lib/data/admin";
+import { visibleClientEmail } from '@/lib/client-contact.mjs';
 import { PageHeader, Card, EmptyState, SectionLabel } from "@/components/ui";
 import { StatusBadge } from "@/components/status-badge";
 import { ProgramAlertBadge } from "@/components/program-alert-badge";
@@ -165,12 +166,13 @@ export default async function AdminCoachesPage({
                         </SectionLabel>
                         <ul className="divide-y divide-border">
                           {list.map((client) => (
-                            <li key={client.id} className="flex items-center justify-between py-2 text-sm">
+                            <li key={client.id} className="flex items-center justify-between gap-3 py-2 text-sm">
                               <Link
                                 href={`/admin/clients/${client.id}`}
-                                className="font-medium text-foreground hover:text-accent"
+                                className="min-w-0 font-medium text-foreground hover:text-accent"
                               >
                                 {client.full_name || client.email}
+                                <span className="mt-0.5 block break-words text-xs font-normal text-muted [overflow-wrap:anywhere]">{visibleClientEmail(client) || 'Sin correo registrado'}</span>
                               </Link>
                               <span className="flex items-center gap-2">
                                 <ProgramAlertBadge status={client.status} end_date={client.end_date} />

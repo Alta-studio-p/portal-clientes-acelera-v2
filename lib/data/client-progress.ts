@@ -1,6 +1,7 @@
 import 'server-only';
 import { requireRole } from '@/lib/auth';
 import { getSql } from '@/lib/db';
+import { withClientContacts } from '@/lib/data/client-contacts';
 import { getCoachByProfileId } from '@/lib/data/client-detail';
 import type { ProgressClient, ProgressCategory, ProgressCoach } from '@/lib/client-progress';
 
@@ -61,5 +62,5 @@ export async function loadProgress(coachId?: string | null) {
   const categories = await sql`select id::text,label,active from public.client_progress_categories order by label`;
   const [{ today }] = await sql`select ((now() at time zone 'America/Bogota')::date)::text as today`;
   const coaches = await sql`select id::text, coalesce(full_name,email) as name, is_support_coach as "isSupport" from public.coaches where is_active order by coalesce(full_name,email)`;
-  return { clients: clients as unknown as ProgressClient[], categories: categories as unknown as ProgressCategory[], coaches: coaches as unknown as ProgressCoach[], today: today as string };
+  return { clients: await withClientContacts(clients as unknown as ProgressClient[]), categories: categories as unknown as ProgressCategory[], coaches: coaches as unknown as ProgressCoach[], today: today as string };
 }

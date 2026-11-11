@@ -19,6 +19,9 @@ export interface Coach {
 }
 
 export interface Client {
+  display_email?: string | null;
+  registration_email?: string | null;
+  email_source?: string | null;
   id: string;
   profile_id: string | null;
   email: string;

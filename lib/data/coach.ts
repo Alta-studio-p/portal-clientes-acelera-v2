@@ -1,9 +1,10 @@
 import "server-only";
 
 import { getSql } from "@/lib/db";
+import { withClientContacts, type ClientContactFields } from '@/lib/data/client-contacts';
 import type { ClientStatus } from "@/lib/supabase/types";
 
-export interface CoachClientRow {
+export interface CoachClientRow extends ClientContactFields {
   id: string;
   full_name: string | null;
   email: string;
@@ -36,5 +37,5 @@ export async function getClientsForCoach(coachId: string): Promise<CoachClientRo
     order by coalesce(c.full_name, c.email)
   `;
 
-  return rows as unknown as CoachClientRow[];
+  return withClientContacts(rows as unknown as CoachClientRow[]);
 }

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getSql } from "@/lib/db";
+import { withClientContacts } from '@/lib/data/client-contacts';
 import type { Call, CallParticipant, CalendarEvent, Client, ClientFile, Coach } from "@/lib/supabase/types";
 
 export interface ClientDetail extends Client {
@@ -51,7 +52,7 @@ export async function getClientDetail(clientId: string): Promise<ClientDetail | 
   `;
 
   if (!clients[0]) return null;
-  const client = clients[0] as unknown as ClientWithCoaches;
+  const [client] = await withClientContacts([clients[0] as unknown as ClientWithCoaches]);
 
   const [calls, files, events] = await Promise.all([
     sql`
