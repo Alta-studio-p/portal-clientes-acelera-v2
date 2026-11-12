@@ -5,6 +5,7 @@ import { requireRole } from '@/lib/auth';
 import { getSql } from '@/lib/db';
 import { CALL_HOURLY_RATE, MAX_FEE_AMOUNT, MAX_FEE_HOURS, PAYMENT_TYPES } from '@/lib/coach-fees';
 import { emailToLearn } from '@/lib/client-matching.mjs';
+import { hoursForMinutes } from '@/lib/call-hours.mjs';
 
 export interface FeeState { error: string | null; success: boolean }
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -24,8 +25,8 @@ export async function saveFee(_previous: FeeState, form: FormData): Promise<FeeS
   const serviceDate = text('serviceDate');
   const paidOn = text('paidOn') || null;
   const paymentType = text('paymentType') || null;
-  const hours = text('hours') ? Number(text('hours').replace(',', '.')) : callId ? 1 : null;
-  const amount = text('amount') ? Number(text('amount').replace(',', '.')) : callId ? (hours ?? 1) * CALL_HOURLY_RATE : null;
+  let hours = text('hours') ? Number(text('hours').replace(',', '.')) : null;
+  let amount = text('amount') ? Number(text('amount').replace(',', '.')) : null;
   const fail = (error: string) => ({ error, success: false });
 
   if (![coachId, ...[id, callId, clientId, callCoachId].filter((v): v is string => v !== null)].every(v => uuid.test(v))) return fail('Identificador no válido.');
@@ -34,7 +35,7 @@ export async function saveFee(_previous: FeeState, form: FormData): Promise<FeeS
   if (hours !== null && (!Number.isFinite(hours) || hours <= 0 || hours > MAX_FEE_HOURS || Math.abs(hours * 100 - Math.round(hours * 100)) > 0.00001)) return fail('Las horas deben ser mayores que cero y máximo 2 (COP $200.000), con máximo dos decimales.');
   if (amount !== null && (!Number.isFinite(amount) || amount < 0 || amount > MAX_FEE_AMOUNT || Math.abs(amount * 100 - Math.round(amount * 100)) > 0.00001)) return fail('Revisa el valor en pesos: máximo COP $200.000, con máximo dos decimales.');
   if (paymentType && !PAYMENT_TYPES.some(p => p.value === paymentType)) return fail('Selecciona un tipo de pago válido.');
-  if (paidOn && (amount === null || !paymentType)) return fail('Para registrar un pago, completa el valor y el tipo de pago.');
+  if (paidOn && !paymentType) return fail('Para registrar un pago, completa el valor y el tipo de pago.');
 
   const sql = getSql();
   try {
@@ -45,8 +46,11 @@ export async function saveFee(_previous: FeeState, form: FormData): Promise<FeeS
       if (!client) return fail('No se encontró el cliente.');
     }
     if (callId) {
-      const [call] = await sql`select id, client_id::text, raw_metadata from public.calls where id = ${callId}::uuid and coach_id = ${coachId}::uuid`;
+      const [call] = await sql`select id, client_id::text, raw_metadata, duration_seconds from public.calls where id = ${callId}::uuid and coach_id = ${coachId}::uuid`;
       if (!call) return fail('La llamada no pertenece a este coach.');
+      hours ??= hoursForMinutes(call.duration_seconds == null ? null : Number(call.duration_seconds) / 60);
+      amount ??= hours === null ? null : hours * CALL_HOURLY_RATE;
+      if (paidOn && amount === null) return fail('Para registrar un pago, completa el valor y el tipo de pago.');
       // La llamada es del coach que la hizo: corregirlo mueve la llamada y su honorario a su hoja.
       if (callCoachId && callCoachId !== coachId) {
         const [target] = await sql`select id from public.coaches where id = ${callCoachId}::uuid`;
@@ -77,6 +81,7 @@ export async function saveFee(_previous: FeeState, form: FormData): Promise<FeeS
         if (learn) await sql`update public.clients set alternate_emails = array_append(alternate_emails, ${learn}) where id = ${clientId}::uuid and not (${learn} = any(alternate_emails))`;
       }
     }
+    if (paidOn && amount === null) return fail('Para registrar un pago, completa el valor y el tipo de pago.');
     if (id) {
       const updated = await sql`
         update public.coach_fees set client_id = ${clientId}::uuid, service_date = ${serviceDate}::date,

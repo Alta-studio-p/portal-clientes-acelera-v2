@@ -34,7 +34,7 @@ export async function getCoachFees(coachId: string, month: string): Promise<FeeR
         coalesce(f.service_date, (c.started_at at time zone 'America/Bogota')::date)::text as service_date,
         f.topic, c.title, c.display_title, c.summary,
         f.hours::float8 as hours, f.amount::float8 as amount,
-        round(c.duration_seconds / 60.0)::int as duration_minutes,
+        (c.duration_seconds / 60.0)::float8 as duration_minutes,
         f.payment_type, f.paid_on::text,
         c.share_url, c.client_match_method, c.coach_needs_confirmation
       from public.calls c
@@ -63,9 +63,10 @@ export async function getCoachFees(coachId: string, month: string): Promise<FeeR
     order by e.service_date desc, e.call_id nulls last, e.id
   `;
   return rows.map(row => {
-    // Llamadas sin honorario guardado: las horas salen de la duración (≤40 min = media hora, ~2 h = 2 h).
+    // Los ajustes guardados se conservan; solo los valores automáticos usan la tarifa vigente.
     const isCall = row.call_id !== null;
-    const hours = (row.hours as number | null) ?? (isCall ? hoursForMinutes(row.duration_minutes as number | null) ?? 1 : null);
+    const duration = row.duration_minutes === null ? null : Number(row.duration_minutes);
+    const hours = (row.hours as number | null) ?? (isCall ? hoursForMinutes(duration) : null);
     const amount = (row.amount as number | null) ?? (isCall && hours !== null ? hours * CALL_HOURLY_RATE : null);
     return {
     id: row.id as string | null,
@@ -83,7 +84,7 @@ export async function getCoachFees(coachId: string, month: string): Promise<FeeR
     client_match_method: row.client_match_method as FeeRow['client_match_method'],
     client_coach_name: row.client_coach_name as string | null,
     coach_needs_confirmation: !!row.coach_needs_confirmation,
-    duration_minutes: row.duration_minutes as number | null,
+    duration_minutes: duration,
   };
   });
 }
