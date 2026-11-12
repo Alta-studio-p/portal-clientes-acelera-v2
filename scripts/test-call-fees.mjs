@@ -34,6 +34,26 @@ test('two duration bands use exact seconds without rounding and have no long-cal
   }
 });
 
+test('November rates do not reprice prior months', () => {
+  for (const [minutes, legacy] of [[35, 0.5], [40, 1], [47, 1], [80, 1], [100, 1.5], [120, 2]]) {
+    assert.equal(callHours.hoursForMinutes(minutes, '2026-10-31'), legacy);
+    assert.equal(callHours.hoursForMinutes(minutes, '2026-11-01'), minutes <= 47 ? 0.5 : 1);
+    assert.equal(callHours.hoursForMinutes(minutes, '2026-12-01'), minutes <= 47 ? 0.5 : 1);
+  }
+});
+
+test('visible minutes use recording duration, never payment units', () => {
+  assert.equal(callHours.feeDurationMinutes({ call_id: callId, duration_minutes: 42, hours: 0.5 }), 42);
+  assert.equal(callHours.feeDurationMinutes({ call_id: callId, duration_minutes: 125, hours: 1 }), 125);
+  assert.equal(callHours.feeDurationMinutes({ call_id: callId, duration_minutes: null, hours: 1 }), null);
+  assert.equal(callHours.feeDurationMinutes({ call_id: null, hours: 1.5 }), 90);
+  assert.equal(callHours.feeDurationMinutes({ call_id: null, hours: null }), null);
+  const dashboard = readFileSync(new URL('../components/coach-fees-dashboard.tsx', import.meta.url), 'utf8');
+  assert.match(dashboard, /Minutos registrados/);
+  assert.match(dashboard, /Duración \(min\)/);
+  assert.doesNotMatch(dashboard, /Horas registradas|Número de horas/);
+});
+
 test('dashboard pricing preserves saved fees and leaves unknown duration unpriced', async () => {
   let role = 'admin';
   let queryCount = 0;
@@ -68,12 +88,14 @@ test('dashboard pricing preserves saved fees and leaves unknown duration unprice
   assert.deepEqual(result.map(row => row.amount), [50_000, 50_000, 100_000, 100_000, null, 175_000, 80_000]);
   assert.equal(result[5].hours, 2);
   assert.equal(result[5].paid_on, '2026-11-01');
+  rows[0].service_date = '2026-10-31';
+  assert.equal((await data.getCoachFees(coachId, '2026-10'))[0].amount, 100_000);
   role = 'coach';
   await data.getCoachFees(coachId, '2026-11');
   await assert.rejects(data.getCoachFees(callId, '2026-11'), /No tienes acceso/);
   role = 'client';
   await assert.rejects(data.getCoachFees(coachId, '2026-11'), /denied/);
-  assert.equal(queryCount, 2);
+  assert.equal(queryCount, 3);
 });
 
 test('saving blank call fees calculates on the server from trusted duration', async () => {
@@ -99,6 +121,10 @@ test('saving blank call fees calculates on the server from trusted duration', as
     assert.equal((await actions.saveFee({}, form)).success, true);
     assert.equal(saved[5], expectedHours);
     assert.equal(saved[6], expectedAmount);
+    form.set('serviceDate', '2026-10-31');
+    assert.equal((await actions.saveFee({}, form)).success, true);
+    assert.equal(saved[5], callHours.hoursForMinutes(seconds === null ? null : seconds / 60, '2026-10-31'));
+    form.set('serviceDate', '2026-11-12');
     form.set('hours', '1.5');
     form.set('amount', '75000');
     assert.equal((await actions.saveFee({}, form)).success, true);

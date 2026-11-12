@@ -48,7 +48,7 @@ export async function saveFee(_previous: FeeState, form: FormData): Promise<FeeS
     if (callId) {
       const [call] = await sql`select id, client_id::text, raw_metadata, duration_seconds from public.calls where id = ${callId}::uuid and coach_id = ${coachId}::uuid`;
       if (!call) return fail('La llamada no pertenece a este coach.');
-      hours ??= hoursForMinutes(call.duration_seconds == null ? null : Number(call.duration_seconds) / 60);
+      hours ??= hoursForMinutes(call.duration_seconds == null ? null : Number(call.duration_seconds) / 60, serviceDate);
       amount ??= hours === null ? null : hours * CALL_HOURLY_RATE;
       if (paidOn && amount === null) return fail('Para registrar un pago, completa el valor y el tipo de pago.');
       // La llamada es del coach que la hizo: corregirlo mueve la llamada y su honorario a su hoja.

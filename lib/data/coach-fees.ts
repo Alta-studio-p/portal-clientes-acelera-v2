@@ -66,7 +66,7 @@ export async function getCoachFees(coachId: string, month: string): Promise<FeeR
     // Los ajustes guardados se conservan; solo los valores automáticos usan la tarifa vigente.
     const isCall = row.call_id !== null;
     const duration = row.duration_minutes === null ? null : Number(row.duration_minutes);
-    const hours = (row.hours as number | null) ?? (isCall ? hoursForMinutes(duration) : null);
+    const hours = (row.hours as number | null) ?? (isCall ? hoursForMinutes(duration, row.service_date as string) : null);
     const amount = (row.amount as number | null) ?? (isCall && hours !== null ? hours * CALL_HOURLY_RATE : null);
     return {
     id: row.id as string | null,
