@@ -23,7 +23,7 @@ const fixture = `
 `;
 const result = spawnSync(process.execPath, ["--input-type=module", "-e", fixture, "--", "--apply"], {
   cwd: tmpdir(), encoding: "utf8",
-  env: {...process.env, NEXT_PUBLIC_SUPABASE_URL:"https://fixture.invalid", SUPABASE_SERVICE_ROLE_KEY:"fixture", LLM_API_KEY:"fixture"},
+  env: {...process.env, SUMMARY_PROVIDER:"openrouter", NEXT_PUBLIC_SUPABASE_URL:"https://fixture.invalid", SUPABASE_SERVICE_ROLE_KEY:"fixture", LLM_API_KEY:"fixture"},
 });
 assert.equal(result.status, 0, result.stderr);
 console.log("PASS: existing client profiles preserved and all calls pages read");
@@ -62,7 +62,7 @@ const generatedFixture = `
 `;
 const translated = spawnSync(process.execPath, ["--input-type=module", "-e", generatedFixture, "--", "--apply"], {
   cwd: tmpdir(), encoding: "utf8",
-  env: {...process.env, NEXT_PUBLIC_SUPABASE_URL:"https://fixture.invalid", SUPABASE_SERVICE_ROLE_KEY:"fixture", LLM_API_KEY:"fixture", TRANSLATE_ES_DELAY_MS:"0"},
+  env: {...process.env, SUMMARY_PROVIDER:"openrouter", NEXT_PUBLIC_SUPABASE_URL:"https://fixture.invalid", SUPABASE_SERVICE_ROLE_KEY:"fixture", LLM_API_KEY:"fixture", TRANSLATE_ES_DELAY_MS:"0"},
 });
 assert.equal(translated.status, 0, translated.stderr);
 console.log("PASS: Spanish edits preserved; only untouched generated profiles refreshed");

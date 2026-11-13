@@ -1,3 +1,6 @@
 {
-  "crons": [{"path": "/api/internal/coaching-insights", "schedule": "0 2 * * *"}]
+  "crons": [
+    {"path": "/api/internal/coaching-insights", "schedule": "0 2 * * *"},
+    {"path": "/api/internal/claude-summary", "schedule": "30 * * * *"}
+  ]
 }

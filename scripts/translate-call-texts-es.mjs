@@ -26,8 +26,9 @@ const BASE_URL = process.env.OPENROUTER_BASE_URL || process.env.LLM_BASE_URL || 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY;
 const LLM_API_KEY = process.env.OPENROUTER_API_KEY || process.env.LLM_API_KEY;
+const SUMMARY_PROVIDER = process.env.SUMMARY_PROVIDER || 'claude-routine';
 
-if (!SUPABASE_URL || !SUPABASE_KEY || !LLM_API_KEY) {
+if (!SUPABASE_URL || !SUPABASE_KEY || (SUMMARY_PROVIDER === 'openrouter' && !LLM_API_KEY)) {
   console.error("Faltan variables: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY y LLM_API_KEY.");
   process.exit(1);
 }
@@ -226,6 +227,21 @@ async function runPool(items, worker) {
 }
 
 async function main() {
+  if (SUMMARY_PROVIDER !== 'openrouter' && SUMMARY_PROVIDER !== 'claude-routine') throw new Error('SUMMARY_PROVIDER no reconocido.');
+  if (SUMMARY_PROVIDER === 'claude-routine' && !CHECK_ONLY) {
+    if (!APPLY) { console.log('Modo prueba: no se activa Claude ni se modifica Supabase.'); return; }
+    if (ONLY_ID || ONLY_SOURCE || TRANSLATE_ALL) throw new Error('La cola de Claude procesa solo contenido pendiente; no admite forzar traducciones o fuentes.');
+    if (!process.env.CRON_SECRET) throw new Error('Falta CRON_SECRET para activar la cola de resúmenes.');
+    const response = await fetch('https://portal-clientes-acelera-v2.vercel.app/api/internal/claude-summary', {
+      method:'POST',redirect:'error',signal:AbortSignal.timeout(110000),
+      headers:{Authorization:`Bearer ${process.env.CRON_SECRET}`},
+    });
+    if (!response.ok) throw new Error(`Cola de Claude: HTTP ${response.status}`);
+    const status=await response.json();
+    if (!status.ok || status.status==='disabled') throw new Error('La cola de Claude no está habilitada.');
+    console.log(`Claude: ${status.started} solicitudes iniciadas; estado ${status.status}. Los resultados se guardan al finalizar cada rutina.`);
+    return;
+  }
   const calls = await fetchCalls();
   const translatedCalls = new Map();
   console.log(
