@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {createHmac} from 'node:crypto';
+import {readFileSync} from 'node:fs';
 import {verifyFathomSignature,followupInput,validateFollowup,followupMessage} from '../lib/coach-followup.mjs';
 import {receiveCoachFollowup,completeCoachFollowup,enqueueCoachFollowups} from '../lib/coach-followup-store.mjs';
 import {deliverCoachFollowups,workspaceTransport,WORKSPACE_SENDER,coachMailbox} from '../lib/coach-followup-mail.mjs';
@@ -8,6 +9,7 @@ const secret='whsec_'+Buffer.from('fixture-secret-never-production').toString('b
 const stamp=String(Math.floor(Date.now()/1000)),raw='{"recording_id":123}',id='fixture-event';
 const signature=createHmac('sha256',Buffer.from(secret.slice(6),'base64')).update(`${id}.${stamp}.${raw}`).digest('base64');
 const headers=new Headers({'webhook-id':id,'webhook-timestamp':stamp,'webhook-signature':`v1,${signature}`});
+assert.match(readFileSync(new URL('../proxy.ts',import.meta.url),'utf8'),/claude-summary\|fathom-followup/);
 assert.equal(verifyFathomSignature(secret,headers,raw),true);
 assert.equal(verifyFathomSignature(secret,headers,raw+' '),false);
 assert.equal(verifyFathomSignature(secret,headers,raw,Date.now()+600000),false);
