@@ -13,6 +13,6 @@ export default async function ClientPreviewLayout({params,children}:{params:Prom
       <p className="inline-flex items-center gap-2 text-sm font-medium text-accent"><Eye size={16} aria-hidden="true"/>Vista previa como cliente</p>
       <Link href={`/admin/clients/${id}`} className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-accent hover:underline"><ArrowLeft size={16} aria-hidden="true"/>Volver a administración</Link>
     </div>
-    <AppShell navItems={[{href:base,label:'Mi progreso'},{href:`${base}/masterclasses`,label:'Masterclases'}]} roleLabel="Admin · Vista previa" userName={profile.full_name||email} userEmail={email}>{children}</AppShell>
+    <AppShell navItems={[{href:base,label:'Mi progreso'},{href:`${base}/masterclasses`,label:'Masterclases'}]} clientNavigation roleLabel="Admin · Vista previa" userName={profile.full_name||email} userEmail={email}>{children}</AppShell>
   </>;
 }

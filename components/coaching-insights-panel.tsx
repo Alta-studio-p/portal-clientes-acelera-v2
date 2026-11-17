@@ -46,6 +46,7 @@ export function CoachingInsightsPanel({clientId,bundle,calls,basePath,readOnly=f
   const stale=Boolean(current&&current.source_hash!==bundle.sourceHash);
   const editable=!readOnly&&!historic;
   const analysis=version?.analysis;
+  const latestEvolution=analysis?.evolution.find(item=>item.source===`S${version?.source_call_ids.length}`);
   const sources=(refs:string[])=>refs.map(ref=>{
     const index=Number(ref.slice(1))-1;
     const id=version?.source_call_ids[index];
@@ -71,13 +72,15 @@ export function CoachingInsightsPanel({clientId,bundle,calls,basePath,readOnly=f
       {version.truncated&&<p className="text-xs text-muted">Algunos resúmenes se abreviaron para mantener el límite de consumo.</p>}
       <section className="grid gap-6 border-b border-border pb-6 lg:grid-cols-[1fr_2fr]">
         <div><h3 className="mb-2 text-sm font-semibold text-muted">Objetivo profesional</h3><p className="text-base leading-7">{analysis.objective.text||'Sin objetivo explícito en las llamadas.'}</p><div className="mt-1 flex flex-wrap">{sources(analysis.objective.sources)}</div></div>
-        <div><h3 className="mb-2 text-sm font-semibold text-muted">Panorama actual</h3><p className="max-w-[72ch] text-sm leading-7">{analysis.overview.text||'Sin evidencia suficiente.'}</p><div className="mt-1 flex flex-wrap">{sources(analysis.overview.sources)}</div></div>
+        <div><h3 className="mb-2 text-sm font-semibold text-muted">Última sesión documentada</h3><p className="max-w-[72ch] text-sm leading-7">{latestEvolution?.change||analysis.overview.text||'Sin evidencia suficiente.'}</p><div className="mt-1 flex flex-wrap">{sources(latestEvolution?[latestEvolution.source]:analysis.overview.sources)}</div>
+          {analysis.overview.text&&<details className="mt-3"><summary className="cursor-pointer text-sm font-medium text-accent">Recorrido del proceso</summary><p className="mt-2 max-w-[72ch] text-sm leading-7 text-muted">{analysis.overview.text}</p><div className="flex flex-wrap">{sources(analysis.overview.sources)}</div></details>}
+        </div>
       </section>
-      <section aria-labelledby="next-focus"><h3 id="next-focus" className="mb-3 text-base font-semibold">Enfoque sugerido para la próxima sesión</h3>
+      <section aria-labelledby="next-focus"><h3 id="next-focus" className="mb-3 text-base font-semibold">Enfoques sugeridos para seguir avanzando</h3>
         <ol className="divide-y divide-border border-y border-border">{analysis.recommendations.map(rec=>{
           const review=!historic?bundle.recommendations.find(r=>r.recommendation_key===rec.key):undefined;
           return <li key={rec.key} className="py-4"><div className="flex flex-wrap items-center gap-2"><span className="text-xs font-medium text-muted">Sugerencia IA</span>{review&&<span className="rounded bg-accent-soft px-2 py-1 text-xs text-accent">{review.state==='accepted'?'Aceptada':review.state==='dismissed'?'Descartada':'Editada por coach'}</span>}</div>
-            <p className={`mt-1 text-sm font-semibold ${review?.state==='dismissed'?'text-muted line-through':''}`}>{review?.state==='edited'?review.note:rec.action}</p>
+            <p className={`mt-1 text-sm font-semibold ${review?.state==='dismissed'?'text-muted line-through':''}`}>{review?.state==='edited'&&review.note?review.note:rec.action}</p>
             <p className="mt-1 max-w-[80ch] text-sm leading-6 text-muted">{rec.reason}</p><div className="flex flex-wrap">{sources(rec.sources)}</div>
             {review?.note&&review.state!=='edited'&&<p className="mt-2 text-sm">Nota del coach: {review.note}</p>}
             {editable&&<ReviewForm clientId={clientId} kind="recommendation" itemKey={rec.key} state={review?.state} note={review?.note}/>}

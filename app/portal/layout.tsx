@@ -16,6 +16,7 @@ export default async function PortalLayout({ children }: { children: ReactNode }
       roleLabel="Cliente"
       userName={profile.full_name || email}
       userEmail={email}
+      clientNavigation
     >
       {children}
     </AppShell>

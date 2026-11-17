@@ -12,11 +12,13 @@ export function ClientHeader({
   backHref,
   headerActions,
   showProgramStatus = true,
+  clientFacing = false,
 }: {
   client: ClientDetail;
   backHref?: string;
   headerActions?: ReactNode;
   showProgramStatus?: boolean;
+  clientFacing?: boolean;
 }) {
   const coachNames = client.coaches.map((c) => c.full_name || c.email).join(", ");
   const email=visibleClientEmail(client);
@@ -48,7 +50,7 @@ export function ClientHeader({
               {showProgramStatus && <StatusBadge status={client.status} />}
               {showProgramStatus && <ProgramAlertBadge status={client.status} end_date={client.end_date} />}
             </div>
-            <p className="mt-1 break-words text-sm text-muted [overflow-wrap:anywhere]">
+            {!clientFacing && <p className="mt-1 break-words text-sm text-muted [overflow-wrap:anywhere]">
               <span title={client.email_source==='account'?'Correo de la cuenta':client.email_source==='onboarding'?'Correo registrado en el onboarding':undefined}>{email || 'Sin correo registrado'}</span>
               {coachNames && (
                 <>
@@ -56,7 +58,7 @@ export function ClientHeader({
                   Coach{client.coaches.length > 1 ? "es" : ""} · {coachNames}
                 </>
               )}
-            </p>
+            </p>}
           </div>
         </div>
 

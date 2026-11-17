@@ -1,15 +1,15 @@
 import { requireRole } from "@/lib/auth";
 import { getClientByProfileId, getClientDetail } from "@/lib/data/client-detail";
-import { ClientDetailView } from "@/components/client-detail-view";
+import { StaffClientWorkspace } from "@/components/staff-client-workspace";
 import { EmptyState } from "@/components/ui";
 
 export default async function PortalPage({
   searchParams,
 }: {
-  searchParams: Promise<{ call?: string }>;
+  searchParams: Promise<{ call?: string; section?: string }>;
 }) {
   const { userId } = await requireRole(["client"]);
-  const { call } = await searchParams;
+  const { call, section } = await searchParams;
 
   const clientRef = await getClientByProfileId(userId);
 
@@ -32,5 +32,5 @@ export default async function PortalPage({
     );
   }
 
-  return <ClientDetailView client={client} selectedCallId={call} callHrefBase="/portal" showProgramStatus={false} />;
+  return <StaffClientWorkspace client={client} selectedCallId={call} section={section} callHrefBase="/portal" showProgramStatus={false} clientFacing readOnly />;
 }

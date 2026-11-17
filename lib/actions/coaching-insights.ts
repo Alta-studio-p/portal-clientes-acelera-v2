@@ -10,6 +10,8 @@ export type CoachingActionState={error:string|null;message:string|null};
 function refresh(id:string){
   revalidatePath(`/coach/clients/${id}`);revalidatePath(`/admin/clients/${id}`);
   revalidatePath('/preview/coaches/[id]','layout');
+  revalidatePath(`/preview/clients/${id}`);
+  revalidatePath('/portal');
 }
 export async function generateCoachingMap(_previous:CoachingActionState,form:FormData):Promise<CoachingActionState>{
   const id=String(form.get('clientId')??'');

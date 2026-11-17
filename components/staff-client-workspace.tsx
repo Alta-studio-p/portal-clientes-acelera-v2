@@ -14,10 +14,10 @@ export async function StaffClientWorkspace(props:ComponentProps<typeof ClientDet
     {[{href:props.callHrefBase,label:'Llamadas y resúmenes',icon:Phone,active:callsView},{href:`${props.callHrefBase}?section=map`,label:'Mapa del proceso',icon:Route,active:!callsView}].map(item=><Link key={item.label} prefetch={false} href={item.href} aria-current={item.active?'page':undefined} className={`inline-flex min-h-11 shrink-0 items-center gap-2 border-b-2 px-3 text-sm font-medium ${item.active?'border-accent text-accent':'border-transparent text-muted hover:text-foreground'}`}><item.icon size={16} aria-hidden="true"/>{item.label}</Link>)}
   </nav>;
   if(callsView)return <ClientDetailView {...props} navigation={navigation}/>;
-  const bundle=await getCoachingInsights(props.client.id);
-  return <div><ClientHeader client={props.client} backHref={props.backHref} headerActions={props.headerActions}/>{navigation}
+  const bundle=await getCoachingInsights(props.client.id,{clientFacing:props.clientFacing});
+  return <div><ClientHeader client={props.client} backHref={props.backHref} headerActions={props.headerActions} showProgramStatus={props.showProgramStatus} clientFacing={props.clientFacing}/>{navigation}
     {props.showNotes&&props.client.notes&&<p className="mb-6 rounded-md bg-surface-muted px-3 py-2 text-xs text-muted">Nota interna: {props.client.notes}</p>}
-    <CoachingInsightsPanel clientId={props.client.id} bundle={bundle} basePath={props.callHrefBase} readOnly={props.readOnly}
+    <CoachingInsightsPanel clientId={props.client.id} bundle={bundle} basePath={props.callHrefBase} readOnly={props.readOnly||props.clientFacing}
       calls={props.client.calls.map(call=>({id:call.id,title:displayCallTitle(call),date:call.started_at}))}/>
   </div>;
 }

@@ -14,6 +14,7 @@ export function AppShell({
   userName,
   userEmail,
   searchAction,
+  clientNavigation = false,
   children,
 }: {
   navItems: NavItem[];
@@ -22,12 +23,13 @@ export function AppShell({
   userEmail: string;
   /** Form GET target for the top search box. Omit to hide search (e.g. portal, which only ever has one client). */
   searchAction?: string;
+  clientNavigation?: boolean;
   children: ReactNode;
 }) {
   return (
     <div className="flex min-h-screen w-full flex-1 flex-col">
       <header className="sticky top-0 z-30 border-b border-border bg-surface">
-        <div className="mx-auto flex h-16 max-w-[1664px] items-center gap-5 px-4 md:px-8">
+        <div className={`mx-auto flex max-w-[1664px] items-center gap-5 px-4 md:px-8 ${clientNavigation?'h-20':'h-16'}`}>
           <a href={navItems[0]?.href ?? "/"} className="flex shrink-0 items-center gap-2.5 rounded-md">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo-icon.png" alt="" className="h-8 w-8 object-contain" />
@@ -36,8 +38,9 @@ export function AppShell({
 
           <NavLinks
             items={navItems}
-            className="hidden min-w-0 flex-1 items-center gap-1 xl:flex"
-            linkClassName="inline-flex min-h-10 items-center gap-2 whitespace-nowrap rounded-md px-3 text-sm font-medium transition-colors"
+            iconSize={clientNavigation?21:16}
+            className={clientNavigation?'hidden min-w-0 flex-1 items-center gap-3 md:flex':'hidden min-w-0 flex-1 items-center gap-1 xl:flex'}
+            linkClassName={clientNavigation?'inline-flex min-h-14 items-center justify-center gap-3 whitespace-nowrap rounded-md px-5 text-base font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent':'inline-flex min-h-10 items-center gap-2 whitespace-nowrap rounded-md px-3 text-sm font-medium transition-colors'}
             activeClassName="bg-accent-soft text-accent"
             inactiveClassName="text-muted hover:bg-surface-muted hover:text-foreground"
           />
@@ -82,8 +85,9 @@ export function AppShell({
 
         <NavLinks
           items={navItems}
-          className="flex gap-1 overflow-x-auto border-t border-border px-3 py-2 xl:hidden"
-          linkClassName="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-medium transition-colors"
+          iconSize={clientNavigation?21:16}
+          className={clientNavigation?'grid grid-cols-2 gap-2 border-t border-border px-4 py-3 md:hidden':'flex gap-1 overflow-x-auto border-t border-border px-3 py-2 xl:hidden'}
+          linkClassName={clientNavigation?'inline-flex min-h-14 items-center justify-center gap-2 rounded-md px-3 text-base font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-accent':'inline-flex min-h-10 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-medium transition-colors'}
           activeClassName="bg-accent-soft text-accent"
           inactiveClassName="text-muted hover:bg-surface-muted hover:text-foreground"
         />

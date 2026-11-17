@@ -29,12 +29,14 @@ export function NavLinks({
   linkClassName = "",
   activeClassName = "",
   inactiveClassName = "",
+  iconSize = 16,
 }: {
   items: NavItem[];
   className?: string;
   linkClassName?: string;
   activeClassName?: string;
   inactiveClassName?: string;
+  iconSize?: number;
 }) {
   const pathname = usePathname();
 
@@ -50,7 +52,7 @@ export function NavLinks({
             aria-current={active ? "page" : undefined}
             className={`${linkClassName} ${active ? activeClassName : inactiveClassName}`}
           >
-            <Icon size={16} strokeWidth={1.8} aria-hidden="true" className="shrink-0" />{item.label}
+            <Icon size={iconSize} strokeWidth={1.8} aria-hidden="true" className="shrink-0" />{item.label}
           </Link>
         );
       })}

@@ -65,6 +65,11 @@ test('missing key, cache, busy client and exhausted daily budget make no paid re
 test('staff authorization and client isolation remain in server boundaries',async()=>{
   const auth=await fs.readFile(new URL('../lib/data/coaching-insights.ts',import.meta.url),'utf8');
   assert.match(auth,/requireRole\(\['admin','coach'\]\)/);assert.match(auth,/co\.profile_id=\$\{session.userId\}/);
-  for(const file of ['../app/portal/page.tsx','../app/preview/clients/[id]/page.tsx'])assert.ok(!(await fs.readFile(new URL(file,import.meta.url),'utf8')).includes('StaffClientWorkspace'));
+  assert.match(auth,/authorizeCoachingMapRead\(getSql\(\),session,clientId\)/);
+  for(const file of ['../app/portal/page.tsx','../app/preview/clients/[id]/page.tsx']){
+    const page=await fs.readFile(new URL(file,import.meta.url),'utf8');
+    assert.match(page,/clientFacing readOnly/);
+    assert.match(page,/section=\{section\}/);
+  }
   const sql=await fs.readFile(new URL('../supabase-coaching-insights.sql',import.meta.url),'utf8');assert.match(sql,/revoke all[\s\S]*authenticated,service_role/);
 });

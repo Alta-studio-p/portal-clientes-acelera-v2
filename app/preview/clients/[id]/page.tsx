@@ -1,14 +1,14 @@
 import { getPreviewClient } from '@/lib/data/client-preview';
-import { ClientDetailView } from '@/components/client-detail-view';
+import { StaffClientWorkspace } from '@/components/staff-client-workspace';
 
 export default async function ClientPreviewPage({ params, searchParams }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ call?: string }>;
+  searchParams: Promise<{ call?: string; section?: string }>;
 }) {
   const { id } = await params;
-  const { call } = await searchParams;
+  const { call, section } = await searchParams;
   const {client} = await getPreviewClient(id);
   const base = `/preview/clients/${id}`;
 
-  return <ClientDetailView client={client} selectedCallId={call} callHrefBase={base} showProgramStatus={false} />;
+  return <StaffClientWorkspace client={client} selectedCallId={call} section={section} callHrefBase={base} showProgramStatus={false} clientFacing readOnly />;
 }
