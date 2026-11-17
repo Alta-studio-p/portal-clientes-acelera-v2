@@ -49,6 +49,7 @@ function AssignmentCard({ call, clients, role, onAssigned, onReviewed, readOnly 
       {call.discarded_at?<span>{reasons[call.discard_reason??'']??'Descartada'}</span>:!call.client_id&&<span>Sin cliente</span>}
       {!call.summary && <span>Sin resumen</span>}
     </div>
+    {call.classification&&<div className="mt-3 border-t border-border pt-3 text-xs text-muted"><p className="font-medium text-accent">{({no_show:'Posible no-show',caro_class:'Clase de Caro detectada',internal:'Posible llamada interna',client_session:'Sesión individual',uncertain:'Requiere revisión'} as Record<string,string>)[call.classification]} · IA</p><p className="mt-1 leading-5">{call.classification_reason}</p>{role==='admin'&&call.class_draft_id&&<Link className="mt-2 inline-flex min-h-9 items-center gap-1 text-accent underline" href={`/admin/masterclasses?edit=${call.class_draft_id}`}>Revisar clase detectada</Link>}</div>}
     {call.summary && <details className="mt-3 text-sm">
       <summary className="min-h-11 cursor-pointer py-3 text-accent focus-visible:outline-2 focus-visible:outline-accent">Ver resumen</summary>
       <div className="mt-2 max-h-72 overflow-auto break-words border-t border-border pt-3"><MarkdownLite text={call.summary} /></div>
@@ -68,7 +69,7 @@ function AssignmentCard({ call, clients, role, onAssigned, onReviewed, readOnly 
           <button type="button" disabled={pending} onClick={() => setEditing(false)} aria-label="Cancelar asignación" title="Cancelar" className={`${control} inline-flex w-11 items-center justify-center px-0`}><X size={18} /></button>
         </div>
       </form> : <button onClick={() => setEditing(true)} disabled={!clients.length} className={`${control} mt-4 inline-flex items-center justify-center gap-2 hover:border-accent hover:text-accent`}><UserRoundPlus size={16} />Asignar cliente</button>)}
-    {!readOnly&&!call.client_id&&<DispositionControl call={call} onReviewed={onReviewed}/>}
+    {!readOnly&&<DispositionControl call={call} onReviewed={onReviewed}/>}
     {!readOnly && !call.discarded_at && !call.client_id && !clients.length && <p className="mt-2 text-xs text-muted">No hay clientes disponibles. Contacta al administrador.</p>}
     {recording && <a href={recording} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex min-h-11 items-center gap-2 text-sm text-accent hover:underline"><ExternalLink size={16} />Ver grabación</a>}
   </article>;
@@ -86,7 +87,7 @@ export function CallAssignmentQueue({ calls, discardedCalls=[], clients, role, r
   const current = Math.min(page, pages - 1);
   return <section aria-label="Revisión de llamadas" className="mt-8">
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-      <h2 className="text-sm font-semibold text-foreground">{view==='discarded'?'Llamadas descartadas':role === 'admin' ? 'Llamadas que requieren atención' : 'Mis llamadas sin cliente'} <span className="ml-1 font-normal text-muted">({visible.length})</span></h2>
+      <h2 className="text-sm font-semibold text-foreground">{view==='discarded'?'Llamadas descartadas':role === 'admin' ? 'Llamadas que requieren atención' : 'Mis llamadas por revisar'} <span className="ml-1 font-normal text-muted">({visible.length})</span></h2>
       <label className="relative block w-full sm:w-72"><span className="sr-only">Buscar llamadas</span><Search className="pointer-events-none absolute left-3 top-3.5 text-muted" size={16} /><input value={query} onChange={e => { setQuery(e.target.value); setPage(0); }} placeholder="Buscar por título, coach o fecha" className={`${control} w-full pl-9`} /></label>
     </div>
     <div role="group" aria-label="Estado de revisión" className="mb-4 inline-flex rounded-md border border-border p-1">{[{key:'pending',label:'Pendientes',count:calls.length},{key:'discarded',label:'Descartadas',count:discardedCalls.length}].map(item=><button key={item.key} type="button" aria-pressed={view===item.key} onClick={()=>{setView(item.key as 'pending'|'discarded');setPage(0);}} className={`inline-flex min-h-10 items-center gap-2 rounded px-3 text-sm font-medium ${view===item.key?'bg-accent-soft text-accent':'text-muted hover:bg-surface-muted'}`}>{item.label}<span className="tabular-nums">{item.count}</span></button>)}</div>

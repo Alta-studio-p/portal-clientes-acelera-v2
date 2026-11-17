@@ -33,7 +33,9 @@ mod._compile(ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions
       // All production-qualified queries are redirected to connection-local temp tables.
       await tx.query(`create temporary table coaches (id uuid primary key, profile_id uuid, full_name text, email text) on commit drop`);
       await tx.query(`create temporary table clients (id uuid primary key, full_name text, email text) on commit drop`);
-      await tx.query(`create temporary table calls (id uuid primary key, client_id uuid, coach_id uuid, title text, display_title text, started_at timestamptz, summary text, recording_url text, share_url text, raw_metadata jsonb,discarded_at timestamptz,discard_reason text,discarded_by uuid) on commit drop`);
+      await tx.query(`create temporary table calls (id uuid primary key, client_id uuid, coach_id uuid, title text, display_title text, started_at timestamptz, summary text, recording_url text, share_url text, raw_metadata jsonb,discarded_at timestamptz,discard_reason text,discarded_by uuid,classification_override_at timestamptz) on commit drop`);
+      await tx.query(`create temporary table call_classifications(call_id uuid,result jsonb,created_at timestamptz) on commit drop`);
+      await tx.query(`create temporary table masterclasses(id uuid,source_call_id uuid) on commit drop`);
       await tx.query(`create temporary table call_review_events(call_id uuid,action text,reason text,actor_id uuid,actor_role text) on commit drop`);
       const guard=fs.readFileSync(path.join(root,'supabase-call-review.sql'),'utf8').match(/create or replace function private\.preserve_discarded_call_assignment\(\)[\s\S]*?\$\$;/)[0].replaceAll('private.','pg_temp.');
       await tx.query(guard);
@@ -89,7 +91,9 @@ mod._compile(ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions
       session={userId:id(2),profile:{role:'coach'}};
       assert.equal((await review(id(37),'discard','no_show')).success,false);checks++;
       assert.equal((await review(id(36),'discard','invalid')).success,false);checks++;
-      assert.equal((await review(id(30),'discard','no_show')).success,false);checks++;
+      assert.equal((await review(id(30),'discard','no_show')).success,true);
+      assert.equal((await db`select client_id from public.calls where id=${id(30)}`)[0].client_id,id(20));
+      assert.equal((await review(id(30),'restore','')).success,true);checks++;
       assert.equal((await review(id(33),'discard','no_show')).success,false);checks++;
       assert.equal((await review(id(36),'discard','no_show')).success,true);checks++;
       assert.equal((await assign(id(36),id(20))).success,false);checks++;
@@ -102,13 +106,13 @@ mod._compile(ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions
       await assert.rejects(db.transaction(write=>write`insert into public.coach_fees(call_id) values(${id(36)})`),/discarded_call_fee/);checks++;
       result=await queue();assert.ok(!result.calls.some(c=>c.id===id(36)));assert.ok(result.discardedCalls.some(c=>c.id===id(36)));checks++;
       assert.equal((await review(id(36),'discard','no_show')).success,true);
-      assert.equal((await db`select count(*)::int as count from private.call_review_events`)[0].count,1);checks++;
+      assert.equal((await db`select count(*)::int as count from private.call_review_events where call_id=${id(36)}`)[0].count,1);checks++;
       session={userId:id(3),profile:{role:'coach'}};
       assert.equal((await review(id(36),'restore','')).success,false);checks++;
       session={userId:id(1),profile:{role:'admin'}};
       assert.equal((await review(id(36),'restore','')).success,true);checks++;
       assert.equal((await db`select discarded_at from public.calls where id=${id(36)}`)[0].discarded_at,null);
-      assert.equal((await db`select count(*)::int as count from private.call_review_events`)[0].count,2);checks++;
+      assert.equal((await db`select count(*)::int as count from private.call_review_events where call_id=${id(36)}`)[0].count,2);checks++;
       for (const forbidden of [{userId:id(4),profile:{role:'client'}},null]) {
         session = forbidden;
         await assert.rejects(queue(),/denied/); await assert.rejects(assign(id(35),id(20)),/denied/);await assert.rejects(review(id(36),'discard','no_show'),/denied/); checks++;

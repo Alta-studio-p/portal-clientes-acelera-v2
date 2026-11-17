@@ -12,10 +12,13 @@ export async function getCallAssignmentQueue(): Promise<{ calls: AttentionCall[]
   const calls = await sql`
     select c.id::text, c.client_id::text, c.coach_id::text, c.title, c.display_title,
       c.started_at::text, c.summary, c.recording_url, c.share_url,
-      coalesce(co.full_name, co.email) as coach_name, c.discarded_at::text, c.discard_reason
+      coalesce(co.full_name, co.email) as coach_name, c.discarded_at::text, c.discard_reason,
+      review.result->>'category' as classification,review.result->>'reason' as classification_reason,m.id::text as class_draft_id
     from public.calls c
     left join public.coaches co on co.id = c.coach_id
-    where (c.client_id is null or (${admin} and c.summary is null))
+    left join lateral(select r.result from private.call_classifications r where r.call_id=c.id order by r.created_at desc limit 1) review on true
+    left join public.masterclasses m on m.source_call_id=c.id
+    where (c.discarded_at is not null or c.client_id is null or c.summary is null)
       and (${admin} or co.profile_id = ${userId}::uuid)
     order by c.started_at desc nulls last, c.id
   `;
@@ -86,15 +89,14 @@ export async function reviewCallDisposition(callId:string,operation:string,reaso
     const [call]=await tx`select c.id,c.client_id,c.discarded_at,co.profile_id::text as coach_profile_id
       from public.calls c left join public.coaches co on co.id=c.coach_id where c.id=${callId}::uuid for update of c`;
     if(!call||(profile.role==='coach'&&call.coach_profile_id!==userId))return fail('No tienes acceso a esta llamada.');
-    if(call.client_id)return fail('Esta llamada ya tiene cliente. Debe revisarla un administrador antes de descartarla.');
     if(operation==='discard') {
       if(call.discarded_at)return {error:null,success:true};
       const [fee]=await tx`select id from public.coach_fees where call_id=${callId}::uuid limit 1`;
       if(fee)return fail('Esta llamada tiene honorarios guardados. Un administrador debe revisarlos antes de descartarla.');
-      await tx`update public.calls set discarded_at=now(),discard_reason=${reason},discarded_by=${userId}::uuid where id=${callId}::uuid`;
+      await tx`update public.calls set discarded_at=now(),discard_reason=${reason},discarded_by=${userId}::uuid,classification_override_at=now() where id=${callId}::uuid`;
     } else {
       if(!call.discarded_at)return {error:null,success:true};
-      await tx`update public.calls set discarded_at=null,discard_reason=null,discarded_by=null where id=${callId}::uuid`;
+      await tx`update public.calls set discarded_at=null,discard_reason=null,discarded_by=null,classification_override_at=now() where id=${callId}::uuid`;
     }
     await tx`insert into private.call_review_events(call_id,action,reason,actor_id,actor_role)
       values(${callId}::uuid,${operation},${operation==='discard'?reason:null},${userId}::uuid,${profile.role})`;

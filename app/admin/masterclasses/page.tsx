@@ -33,7 +33,8 @@ export default async function AdminMasterclassesPage({ searchParams }: {
       {items.map((item) => <li key={item.id} className="flex items-start justify-between gap-4 py-4">
         <div className="min-w-0">
           <h2 className="break-words font-medium">{item.title}</h2>
-          <p className="mt-1 text-sm text-muted">{formatMasterclassDate(item.starts_at, item.status !== "recording")} · {masterclassStatuses[item.status]}</p>
+          <p className="mt-1 text-sm text-muted">{formatMasterclassDate(item.starts_at, item.status !== "recording")} · {masterclassStatuses[item.status]} · {item.category==='caro'?'Clases de Caro':'Inteligencia artificial'}</p>
+          {item.source_call_id&&item.status==='draft'&&<p className="mt-2 text-xs font-medium text-amber-800">Detectada por IA · Pendiente de aprobación</p>}
         </div>
         <Link href={`${base}?edit=${item.id}`} aria-label={`Editar ${item.title}`} title="Editar clase" className="inline-flex size-10 shrink-0 items-center justify-center rounded-md border border-border bg-surface hover:bg-surface-muted">
           <Pencil size={16} aria-hidden="true" />

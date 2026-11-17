@@ -47,10 +47,10 @@ export default async function UiPreview({ params, searchParams }: {
       recording_url: null, share_url: null, calendar_event_id: null, raw_metadata: null, participants: [],
     })),
   };
-  const classes: Masterclass[] = ['Contenido para LinkedIn con IA', 'Agentes de inteligencia artificial'].map((title, index) => ({
+  const classes: Masterclass[] = ['Contenido para LinkedIn con IA', 'Agentes de inteligencia artificial', 'Entrevistas y narrativa profesional'].map((title, index) => ({
     id: `class-${index}`, title, description: 'Masterclase de prueba para revisar el diseño de la biblioteca.',
     starts_at: `2026-10-0${3-index}T15:00:00Z`, previous_starts_at: null, duration_minutes: 60,
-    status: 'recording', live_url: null, drive_url: null,
+    status: 'recording', live_url: null, drive_url: null, category: index===2?'caro':'ai',
   }));
   const coaching:CoachingBundle={available:true,sourceHash:'demo',summaryCount:4,totalCalls:4,topics:[],recommendations:[],versions:[{
     id:'demo-insight',source_hash:'demo',model:'google/gemini-2.5-flash-lite',created_at:'2026-11-10T15:00:00Z',truncated:false,cost_usd:null,

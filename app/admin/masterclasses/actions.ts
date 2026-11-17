@@ -17,7 +17,7 @@ export async function saveMasterclass(id: string | null, _state: string, form: F
   } catch (error) {
     return error instanceof Error ? error.message : "Revisa los datos.";
   }
-  const { title, description, status, startsAt, duration, live, drive } = value;
+  const { title, description, status, startsAt, duration, live, drive, fathom, category } = value;
   try {
     const sql = getSql();
     if (id) {
@@ -25,14 +25,14 @@ export async function saveMasterclass(id: string | null, _state: string, form: F
         update public.masterclasses set title = ${title}, description = ${description}, status = ${status},
           previous_starts_at = case when status in ('scheduled', 'cancelled') and starts_at <> ${startsAt}::timestamptz
             then starts_at else previous_starts_at end,
-          starts_at = ${startsAt}, duration_minutes = ${duration}, live_url = ${live}, drive_url = ${drive}
+          starts_at = ${startsAt}, duration_minutes = ${duration}, live_url = ${live}, drive_url = ${drive},fathom_url=${fathom},category=${category}
         where id = ${id}::uuid returning id
       `;
       if (!updated.length) return "No se encontró la clase.";
     } else {
       await sql`
-        insert into public.masterclasses (title, description, status, starts_at, duration_minutes, live_url, drive_url)
-        values (${title}, ${description}, ${status}, ${startsAt}, ${duration}, ${live}, ${drive})
+        insert into public.masterclasses (title, description, status, starts_at, duration_minutes, live_url, drive_url,fathom_url,category)
+        values (${title}, ${description}, ${status}, ${startsAt}, ${duration}, ${live}, ${drive},${fathom},${category})
       `;
     }
   } catch (error) {
@@ -41,5 +41,6 @@ export async function saveMasterclass(id: string | null, _state: string, form: F
   }
   revalidatePath("/portal/masterclasses");
   revalidatePath("/admin/masterclasses");
+  revalidatePath('/preview/clients/[id]/masterclasses','page');
   redirect("/admin/masterclasses?saved=1");
 }

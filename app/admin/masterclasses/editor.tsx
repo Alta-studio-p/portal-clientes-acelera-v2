@@ -14,6 +14,7 @@ const fields = [
   { key: "duration_minutes", label: "Duración (minutos)", type: "number", min: 5, max: 480 },
   { key: "live_url", label: "Enlace de Google Meet o Zoom", type: "url", maxLength: 2048 },
   { key: "drive_url", label: "Enlace del video en Google Drive", type: "url", maxLength: 2048 },
+  { key: "fathom_url", label: "Grabación de Fathom", type: "url", maxLength: 2048 },
 ] as const;
 
 export function MasterclassEditor({ item }: { item?: Masterclass }) {
@@ -26,6 +27,7 @@ export function MasterclassEditor({ item }: { item?: Masterclass }) {
     duration_minutes: item ? String(item.duration_minutes ?? "") : "60",
     live_url: item?.live_url ?? "",
     drive_url: item?.drive_url ?? "",
+    fathom_url:item?.fathom_url??'',category:item?.category??'ai',
   });
   const change = (key: keyof typeof values, value: string) => setValues((current) => ({ ...current, [key]: value }));
   return (
@@ -42,11 +44,17 @@ export function MasterclassEditor({ item }: { item?: Masterclass }) {
           <textarea name="description" rows={3} maxLength={2000} value={values.description} onChange={(event) => change("description", event.target.value)} className={field} />
         </label>
         <label>
+          <span className="mb-1.5 block text-sm font-medium">Categoría</span>
+          <select name="category" value={values.category} onChange={event=>change('category',event.target.value)} className={field}><option value="ai">Inteligencia artificial</option><option value="caro">Clases de Caro</option></select>
+        </label>
+        <label>
           <span className="mb-1.5 block text-sm font-medium">Estado</span>
           <select name="status" value={values.status} onChange={(event) => change("status", event.target.value)} className={field}>
             {Object.entries(masterclassStatuses).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
         </label>
+        {item?.source_call_id&&<p className="text-sm text-amber-900 sm:col-span-2">Detectada por IA. Revisa que sea una clase grupal y que la grabación pueda compartirse con todos los clientes antes de publicarla.</p>}
+        {values.status==='recording'&&<p className="text-sm text-accent sm:col-span-2">Esta grabación será visible para todos los clientes.</p>}
         {error && <p role="alert" className="text-sm text-red-700 sm:col-span-2">{error}</p>}
         <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
           <button type="submit" className="inline-flex min-h-10 items-center gap-2 rounded-md bg-accent px-4 text-sm font-medium text-white disabled:opacity-60">
