@@ -29,10 +29,13 @@ export default async function CoachPreviewPage({ params, searchParams }: {
     const clients = new Map(rows.filter(r => r.client_id).map(r => [r.client_id!, { id: r.client_id!, name: r.client_name }]));
     return <CoachFeesDashboard readOnly basePath={`${base}/fees`} clientBasePath={`${base}/clients`} coaches={[{ id: coach.id, name: coach.full_name || coach.email }]} coachId={coach.id} month={month} rows={rows} clients={[...clients.values()]} />;
   }
-  if (view.length === 1 && view[0] === 'unassigned') return <div>
+  if (view.length === 1 && view[0] === 'unassigned') {
+    const calls=await getPreviewUnassignedCalls(coach.id);
+    return <div>
     <PageHeader title="Asignar clientes" />
-    <CallAssignmentQueue calls={await getPreviewUnassignedCalls(coach.id)} clients={[]} role="coach" readOnly />
+    <CallAssignmentQueue calls={calls.filter(call=>!call.discarded_at)} discardedCalls={calls.filter(call=>call.discarded_at)} clients={[]} role="coach" readOnly />
   </div>;
+  }
   if (view.length === 2 && view[0] === 'clients') {
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(view[1])) notFound();
     const assigned = await getClientsForCoach(coach.id);

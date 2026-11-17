@@ -46,8 +46,8 @@ export async function saveFee(_previous: FeeState, form: FormData): Promise<FeeS
       if (!client) return fail('No se encontró el cliente.');
     }
     if (callId) {
-      const [call] = await sql`select id, client_id::text, raw_metadata, duration_seconds from public.calls where id = ${callId}::uuid and coach_id = ${coachId}::uuid`;
-      if (!call) return fail('La llamada no pertenece a este coach.');
+      const [call] = await sql`select id, client_id::text, raw_metadata, duration_seconds from public.calls where id = ${callId}::uuid and coach_id = ${coachId}::uuid and discarded_at is null`;
+      if (!call) return fail('La llamada no está disponible para este coach o fue descartada.');
       hours ??= hoursForMinutes(call.duration_seconds == null ? null : Number(call.duration_seconds) / 60, serviceDate);
       amount ??= hours === null ? null : hours * CALL_HOURLY_RATE;
       if (paidOn && amount === null) return fail('Para registrar un pago, completa el valor y el tipo de pago.');

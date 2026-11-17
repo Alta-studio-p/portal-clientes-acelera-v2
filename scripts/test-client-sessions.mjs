@@ -21,13 +21,15 @@ const cases = [
   ['unknown coach', { coach_id: null }, { coach_id: null }, 2],
   ['prefer summary', { summary: null }, {}, 1, id(2)],
   ['prefer recording link', { share_url: null }, {}, 1, id(2)],
+  ['discarded call excluded', {discarded_at:'2026-11-17T12:00:00Z'}, {}, 1,id(2)],
+  ['all discarded calls excluded', {discarded_at:'2026-11-17T12:00:00Z'}, {discarded_at:'2026-11-17T12:00:00Z'}, 0],
 ];
 for (const [name, first, second, count, preferred] of cases) {
   const rows = [{ ...base, id: id(1), coach_id: id(200), ...first }, { ...base, id: id(2), coach_id: id(201), ...second }];
   const query = `with fixture_calls as (
     select * from jsonb_to_recordset($1::jsonb) as r(id uuid, client_id uuid, coach_id uuid,
       started_at timestamptz, title text, source text, summary text,
-      share_url text, recording_url text, created_at timestamptz)
+      share_url text, recording_url text, created_at timestamptz,raw_metadata jsonb,discarded_at timestamptz)
   ) ${CLIENT_SESSIONS_QUERY.replaceAll('public.calls', 'fixture_calls')}`;
   const result = await sql.query(query, [JSON.stringify(rows)]);
   assert.equal(result.length, count, name);

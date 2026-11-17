@@ -10,7 +10,7 @@ const id='00000000-0000-4000-8000-000000000001';
 const callId='00000000-0000-4000-8000-000000000002';
 const input={title:'Sesión',display_title:'Título manual',summary:'Meeting Purpose\n\nReview the CV and interview preparation. https://example.invalid/recording',next_steps:null};
 const translated={display_title:'Otro título',summary:'Propósito de la reunión\n\nRevisar la hoja de vida y la preparación de la entrevista. https://example.invalid/recording',next_steps:null};
-function fixture({stale=false,status='running',fixture=false}={}) {
+function fixture({stale=false,status='running',fixture=false,discarded=false}={}) {
   const job={id,call_id:callId,fixture,status,snapshot:summaryInput(input),source_hash:summaryHash(input),token_hash:tokenHash('fixture-token')};
   const writes=[];
   const sql=async(strings,...values)=>{
@@ -18,7 +18,7 @@ function fixture({stale=false,status='running',fixture=false}={}) {
     if(query.includes('count(*)'))return [{total:0}];
     if(query.includes('select * from private.claude_summary_jobs')){assert.match(query,/expires_at>now\(\)/);return [job];}
     if(query.includes('select id from private.claude_summary_jobs'))return [{id}];
-    if(query.includes('from public.calls'))return [{...input,id:callId,client_id:null,...(stale?{summary:'Edición manual posterior'}:{})}];
+    if(query.includes('from public.calls'))return [{...input,id:callId,client_id:null,discarded_at:discarded?'2026-11-17T12:00:00Z':null,...(stale?{summary:'Edición manual posterior'}:{})}];
     if(query.includes('pg_advisory_xact_lock'))return [];
     if(query.includes("set status='starting'")){job.status='starting';return [job];}
     if(query.startsWith('update ')||query.trim().startsWith('update ')){writes.push({query,values});return [];}
@@ -57,6 +57,13 @@ test('wrong job tokens cannot retrieve data or save results',async()=>{
 
 test('stale callbacks cannot overwrite edited call content',async()=>{
   const {sql,writes}=fixture({stale:true});
+  assert.equal((await completeSummaryJob(sql,id,'Bearer fixture-token',translated)).status,409);
+  assert.equal(writes.some(w=>w.query.includes('update public.calls')),false);
+  assert.equal(writes.some(w=>w.query.includes("status='obsolete'")),true);
+});
+
+test('a call discarded during analysis cannot receive a later summary write',async()=>{
+  const {sql,writes}=fixture({discarded:true});
   assert.equal((await completeSummaryJob(sql,id,'Bearer fixture-token',translated)).status,409);
   assert.equal(writes.some(w=>w.query.includes('update public.calls')),false);
   assert.equal(writes.some(w=>w.query.includes("status='obsolete'")),true);

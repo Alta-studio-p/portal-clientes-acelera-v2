@@ -23,7 +23,7 @@ export async function getPreviewUnassignedCalls(coachId: string): Promise<Attent
   const sql = getSql();
   const calls = await sql`select c.id::text, c.client_id::text, c.coach_id::text,
     c.title, c.display_title, c.started_at::text, c.summary, c.recording_url, c.share_url,
-    coalesce(co.full_name, co.email) as coach_name
+    coalesce(co.full_name, co.email) as coach_name,c.discarded_at::text,c.discard_reason
     from public.calls c join public.coaches co on co.id=c.coach_id
     where c.coach_id=${coachId}::uuid and c.client_id is null
     order by c.started_at desc nulls last, c.id`;

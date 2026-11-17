@@ -14,6 +14,7 @@ try {
         'internal_call', c.raw_metadata->'internal_call') as raw_metadata
     from public.calls c left join public.coaches k on k.id = c.coach_id
     where c.source = 'fathom' and c.started_at between now() - make_interval(days => ${days}::int) and now()
+      and c.discarded_at is null
       and c.title ~* '^ *(at +)?on[ -]?boarding'
     order by c.started_at desc, c.fathom_call_id
   `;

@@ -39,7 +39,7 @@ export async function getCoachFees(coachId: string, month: string): Promise<FeeR
         c.share_url, c.client_match_method, c.coach_needs_confirmation
       from public.calls c
       left join public.coach_fees f on f.call_id = c.id
-      where c.coach_id = ${coachId}::uuid and c.started_at is not null
+      where c.coach_id = ${coachId}::uuid and c.started_at is not null and c.discarded_at is null
       union all
       select f.id::text, null, f.coach_id::text, f.client_id::text, f.service_date::text,
         f.topic, null, null, null, f.hours::float8, f.amount::float8, null::int,

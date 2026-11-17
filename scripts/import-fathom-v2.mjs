@@ -237,7 +237,7 @@ async function createOnboardingClients(coaches) {
   const since = new Date(Math.max(Date.now() - 14 * 86400_000, Date.parse("2026-11-06T05:00:00Z"))).toISOString();
   const calls = await allRows(
     "calls?select=id,fathom_call_id,title,client_id,started_at,summary,coach_id,coach_resolution,coach_needs_confirmation,raw_metadata" +
-    `&source=eq.fathom&started_at=gte.${encodeURIComponent(since)}&started_at=lte.${encodeURIComponent(new Date().toISOString())}`
+    `&source=eq.fathom&discarded_at=is.null&started_at=gte.${encodeURIComponent(since)}&started_at=lte.${encodeURIComponent(new Date().toISOString())}`
   );
   const staff = coaches.flatMap(coach => [coach.email, ...(coach.alternate_emails ?? [])]);
   const audit = identifyOnboardingCandidates(calls.map(call => ({
@@ -461,7 +461,7 @@ async function main() {
   const clients = await readClients();
   const masterClients = readMasterClients(clients);
   const assignedCoachFor = await readAssignedCoaches();
-  const knownCalls = new Map((await allRows("calls?select=id,fathom_call_id,client_id,coach_id,coach_resolution,title,started_at,summary,next_steps,raw_metadata")).map(call => [call.fathom_call_id, call]));
+  const knownCalls = new Map((await allRows("calls?select=id,fathom_call_id,client_id,coach_id,coach_resolution,title,started_at,summary,next_steps,raw_metadata,discarded_at")).map(call => [call.fathom_call_id, call]));
   const seenIds = new Set();
   const stats = {
     meetings: 0,
@@ -506,6 +506,10 @@ async function main() {
       }
 
       if (!meeting.recording_id) throw new Error(`Fathom ${source.key}: meeting without recording_id.`);
+      if(knownCalls.get(String(meeting.recording_id))?.discarded_at) {
+        seenIds.add(String(meeting.recording_id));
+        continue;
+      }
       const matched = clientForMeeting(meeting, clients);
       let client = matched.client;
       let clientMethod = matched.method, clientReason = matched.reason;
@@ -579,6 +583,7 @@ async function main() {
       };
 
       const savedCall = await upsertCall(row, knownCalls);
+      if(savedCall?.discarded_at)continue;
       if (billsByCall(source) && meeting.recorded_by?.email) ownKeys.add(sessionKey(localDay(row.started_at), row.title));
       if (APPLY) {
         stats.imported += 1;

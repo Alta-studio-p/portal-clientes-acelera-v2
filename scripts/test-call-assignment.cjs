@@ -33,11 +33,18 @@ mod._compile(ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions
       // All production-qualified queries are redirected to connection-local temp tables.
       await tx.query(`create temporary table coaches (id uuid primary key, profile_id uuid, full_name text, email text) on commit drop`);
       await tx.query(`create temporary table clients (id uuid primary key, full_name text, email text) on commit drop`);
-      await tx.query(`create temporary table calls (id uuid primary key, client_id uuid, coach_id uuid, title text, display_title text, started_at timestamptz, summary text, recording_url text, share_url text, raw_metadata jsonb) on commit drop`);
+      await tx.query(`create temporary table calls (id uuid primary key, client_id uuid, coach_id uuid, title text, display_title text, started_at timestamptz, summary text, recording_url text, share_url text, raw_metadata jsonb,discarded_at timestamptz,discard_reason text,discarded_by uuid) on commit drop`);
+      await tx.query(`create temporary table call_review_events(call_id uuid,action text,reason text,actor_id uuid,actor_role text) on commit drop`);
+      const guard=fs.readFileSync(path.join(root,'supabase-call-review.sql'),'utf8').match(/create or replace function private\.preserve_discarded_call_assignment\(\)[\s\S]*?\$\$;/)[0].replaceAll('private.','pg_temp.');
+      await tx.query(guard);
+      await tx.query('create trigger preserve_discarded_call_assignment before update on pg_temp.calls for each row execute function pg_temp.preserve_discarded_call_assignment()');
       await tx.query(`create temporary table coach_client_assignments (id uuid default gen_random_uuid(), coach_id uuid, client_id uuid, is_primary boolean, unique(coach_id,client_id)) on commit drop`);
       await tx.query(`create temporary table coach_fees (id uuid default gen_random_uuid(), call_id uuid, client_id uuid) on commit drop`);
+      const feeGuard=fs.readFileSync(path.join(root,'supabase-call-review.sql'),'utf8').match(/create or replace function private\.guard_discarded_call_fee\(\)[\s\S]*?\$\$;/)[0].replaceAll('private.','pg_temp.').replaceAll('public.','pg_temp.');
+      await tx.query(feeGuard);
+      await tx.query('create trigger guard_discarded_call_fee before insert or update on pg_temp.coach_fees for each row execute function pg_temp.guard_discarded_call_fee()');
       db = async (strings, ...values) => {
-        const text = strings.reduce((s, part, i) => s + (i ? `$${i}` : '') + part, '').replaceAll('public.', 'pg_temp.');
+        const text = strings.reduce((s, part, i) => s + (i ? `$${i}` : '') + part, '').replaceAll('public.', 'pg_temp.').replaceAll('private.','pg_temp.');
         return tx.query(text, values);
       };
       db.transaction = async work => {
@@ -49,7 +56,7 @@ mod._compile(ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions
       await db`insert into public.clients values (${id(20)},'Client A','a@example.invalid'),(${id(21)},'Client B','b@example.invalid'),(${id(22)},'Other client','c@example.invalid')`;
       await db`insert into public.coach_client_assignments (coach_id,client_id,is_primary) values (${id(10)},${id(20)},true),(${id(11)},${id(21)},true)`;
       for (const n of [30,31,32,33,34,35]) await db`insert into public.calls (id,coach_id,title,raw_metadata) values (${id(n)},${n === 31 ? id(11) : id(10)},'Call','{"manual_note":"keep"}'::jsonb)`;
-      const { assignCallClient: assign, getCallAssignmentQueue: queue } = mod.exports;
+      const { assignCallClient: assign, getCallAssignmentQueue: queue,reviewCallDisposition:review } = mod.exports;
       let result = await queue(); assert.equal(result.calls.length,6); assert.equal(result.clients.length,3); checks++;
       session = { userId: id(2), profile: { role:'coach' } };
       result = await queue(); assert.equal(result.calls.length,5); assert.ok(result.calls.every(c=>c.coach_id===id(10))); assert.deepEqual(result.clients.map(c=>c.id),[id(20)]); checks++;
@@ -78,9 +85,33 @@ mod._compile(ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions
       await db`insert into public.coach_fees (call_id,client_id) values (${id(35)},null)`;
       await assert.rejects(assign(id(35),id(20)),/fixture failure/);
       assert.equal((await db`select client_id from public.calls where id=${id(35)}`)[0].client_id,null); checks++;
+      await db`insert into public.calls(id,coach_id,summary,share_url) values(${id(36)},${id(10)},'Keep original summary','https://example.invalid/video'),(${id(37)},${id(11)},'Other coach',null)`;
+      session={userId:id(2),profile:{role:'coach'}};
+      assert.equal((await review(id(37),'discard','no_show')).success,false);checks++;
+      assert.equal((await review(id(36),'discard','invalid')).success,false);checks++;
+      assert.equal((await review(id(30),'discard','no_show')).success,false);checks++;
+      assert.equal((await review(id(33),'discard','no_show')).success,false);checks++;
+      assert.equal((await review(id(36),'discard','no_show')).success,true);checks++;
+      assert.equal((await assign(id(36),id(20))).success,false);checks++;
+      const discarded=(await db`select * from public.calls where id=${id(36)}`)[0];
+      assert.ok(discarded.discarded_at);assert.equal(discarded.summary,'Keep original summary');assert.equal(discarded.share_url,'https://example.invalid/video');checks++;
+      await assert.rejects(db.transaction(write=>write`update public.calls set client_id=${id(20)},coach_id=${id(11)} where id=${id(36)}`),/discarded_call_assignment/);
+      await db`update public.calls set coach_id=${id(11)} where id=${id(36)}`;
+      const protectedCall=(await db`select client_id,coach_id from public.calls where id=${id(36)}`)[0];
+      assert.equal(protectedCall.client_id,null);assert.equal(protectedCall.coach_id,id(10));checks++;
+      await assert.rejects(db.transaction(write=>write`insert into public.coach_fees(call_id) values(${id(36)})`),/discarded_call_fee/);checks++;
+      result=await queue();assert.ok(!result.calls.some(c=>c.id===id(36)));assert.ok(result.discardedCalls.some(c=>c.id===id(36)));checks++;
+      assert.equal((await review(id(36),'discard','no_show')).success,true);
+      assert.equal((await db`select count(*)::int as count from private.call_review_events`)[0].count,1);checks++;
+      session={userId:id(3),profile:{role:'coach'}};
+      assert.equal((await review(id(36),'restore','')).success,false);checks++;
+      session={userId:id(1),profile:{role:'admin'}};
+      assert.equal((await review(id(36),'restore','')).success,true);checks++;
+      assert.equal((await db`select discarded_at from public.calls where id=${id(36)}`)[0].discarded_at,null);
+      assert.equal((await db`select count(*)::int as count from private.call_review_events`)[0].count,2);checks++;
       for (const forbidden of [{userId:id(4),profile:{role:'client'}},null]) {
         session = forbidden;
-        await assert.rejects(queue(),/denied/); await assert.rejects(assign(id(35),id(20)),/denied/); checks++;
+        await assert.rejects(queue(),/denied/); await assert.rejects(assign(id(35),id(20)),/denied/);await assert.rejects(review(id(36),'discard','no_show'),/denied/); checks++;
       }
       throw rollback;
     });

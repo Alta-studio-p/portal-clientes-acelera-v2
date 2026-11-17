@@ -141,7 +141,7 @@ export async function getCallsNeedingAttention(): Promise<Call[]> {
       started_at::text, duration_seconds, summary, next_steps, recording_url, share_url,
       calendar_event_id::text, raw_metadata
     from public.calls
-    where summary is null or client_id is null
+    where discarded_at is null and (summary is null or client_id is null)
     order by started_at desc nulls last
     limit 50
   `;
@@ -306,7 +306,7 @@ export async function getAdminAnalytics({ days = 30 }: { days?: number }): Promi
     sql`
       select started_at::text, coach_id::text
       from public.calls
-      where started_at >= ${from}::timestamptz and started_at < ${to}::timestamptz
+      where discarded_at is null and started_at >= ${from}::timestamptz and started_at < ${to}::timestamptz
     `,
     sql`
       select status, count(*)::int as count

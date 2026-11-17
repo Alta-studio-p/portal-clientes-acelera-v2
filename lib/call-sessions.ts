@@ -21,7 +21,7 @@ export const CLIENT_SESSIONS_QUERY = `
         created_at asc, id asc
     ) as session_rank
     from public.calls candidate
-    where not exists (
+    where candidate.discarded_at is null and not exists (
       select 1 from public.calls primary_call
       where primary_call.id::text = candidate.raw_metadata->>'onboarding_duplicate_of'
         and primary_call.client_id = candidate.client_id and primary_call.id <> candidate.id

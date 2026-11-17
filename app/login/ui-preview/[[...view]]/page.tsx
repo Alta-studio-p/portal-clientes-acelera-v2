@@ -10,6 +10,7 @@ import type { ProgressClient } from '@/lib/client-progress';
 import type { Masterclass } from '@/lib/data/masterclasses';
 import { CoachingInsightsPanel } from '@/components/coaching-insights-panel';
 import { ClientHeader } from '@/components/client-detail/client-header';
+import { CallAssignmentQueue } from '@/components/call-assignment-queue';
 import { TOPICS } from '@/lib/coaching-topics.mjs';
 import type { CoachingBundle } from '@/lib/coaching-insight-types';
 
@@ -67,9 +68,9 @@ export default async function UiPreview({ params, searchParams }: {
   return <AppShell roleLabel="Vista local" userName="Administrador de prueba" userEmail="demo@example.com" clientNavigation={clientView} navItems={clientView?[
     {href:`${base}/client`,label:'Mi progreso'},{href:`${base}/masterclasses`,label:'Masterclases'},
   ]:[
-    {href: `${base}/progress`, label: 'Progreso'}, {href: `${base}/journey`, label: 'Mapa del proceso'}, {href: `${base}/client`, label: 'Mi progreso'}, {href: `${base}/masterclasses`, label: 'Masterclases'},
+    {href: `${base}/progress`, label: 'Progreso'}, {href: `${base}/journey`, label: 'Mapa del proceso'}, {href: `${base}/attention`, label: 'Revisar llamadas'}, {href: `${base}/client`, label: 'Mi progreso'}, {href: `${base}/masterclasses`, label: 'Masterclases'},
   ]}>
     <p className="mb-6 text-xs text-muted">Vista de diseño con datos ficticios. <Link href="/login" className="text-accent underline">Ir al acceso real</Link></p>
-    {view==='journey'||view==='client-map'?<><ClientHeader client={client} clientFacing={clientView} showProgramStatus={!clientView}/>{clientView&&clientNav}<CoachingInsightsPanel clientId={client.id} bundle={coaching} calls={client.calls.map(call=>({id:call.id,title:call.title??'',date:call.started_at}))} basePath={`${base}/client`} readOnly/></>:view === 'client' || view === 'clients' ? <ClientDetailView client={client} callHrefBase={`${base}/${path.join('/')}`} selectedCallId={(await searchParams).call} showProgramStatus={false} clientFacing={clientView} navigation={clientView?clientNav:undefined} /> : view === 'masterclasses' ? <MasterclassesView classes={classes} /> : <Suspense><ClientProgressDashboard clients={clients} categories={[{id:'paid',label:'Pagado',active:true},{id:'pending',label:'Pendiente de pago',active:true},{id:'work',label:'Consiguió trabajo',active:true}]} coaches={[{id:'demo-coach',name:'Alex',isSupport:false}]} isAdmin readOnly today="2026-11-08" basePath={base} /></Suspense>}
+    {view==='attention'?<CallAssignmentQueue role="admin" calls={client.calls.slice(0,3).map(call=>({...call,client_id:null,coach_name:'Alex'}))} clients={clients.map(item=>({id:item.id,name:item.name,email:item.email}))} discardedCalls={[{...client.calls[3],client_id:null,coach_name:'Alex',discarded_at:'2026-11-17T12:00:00Z',discard_reason:'no_show'}]}/>:view==='journey'||view==='client-map'?<><ClientHeader client={client} clientFacing={clientView} showProgramStatus={!clientView}/>{clientView&&clientNav}<CoachingInsightsPanel clientId={client.id} bundle={coaching} calls={client.calls.map(call=>({id:call.id,title:call.title??'',date:call.started_at}))} basePath={`${base}/client`} readOnly/></>:view === 'client' || view === 'clients' ? <ClientDetailView client={client} callHrefBase={`${base}/${path.join('/')}`} selectedCallId={(await searchParams).call} showProgramStatus={false} clientFacing={clientView} navigation={clientView?clientNav:undefined} /> : view === 'masterclasses' ? <MasterclassesView classes={classes} /> : <Suspense><ClientProgressDashboard clients={clients} categories={[{id:'paid',label:'Pagado',active:true},{id:'pending',label:'Pendiente de pago',active:true},{id:'work',label:'Consiguió trabajo',active:true}]} coaches={[{id:'demo-coach',name:'Alex',isSupport:false}]} isAdmin readOnly today="2026-11-08" basePath={base} /></Suspense>}
   </AppShell>;
 }
