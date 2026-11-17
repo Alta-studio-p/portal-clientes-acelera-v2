@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {spawnSync} from 'node:child_process';
 import {tmpdir} from 'node:os';
 import {summaryPatch,summaryHash,summaryInput,tokenHash,secretMatches,routineUrl} from '../lib/claude-summary.mjs';
-import {authorizeSummaryJob,completeSummaryJob,startSummaryJob,summaryPayload} from '../lib/claude-summary-store.mjs';
+import {authorizeSummaryJob,completeSummaryJob,startSummaryJob,summaryPayload,dispatchSummaries} from '../lib/claude-summary-store.mjs';
 
 const id='00000000-0000-4000-8000-000000000001';
 const callId='00000000-0000-4000-8000-000000000002';
@@ -98,6 +98,29 @@ test('a dispatch timeout never triggers an HTTP retry',async()=>{
   } finally {
     if(oldUrl===undefined)delete process.env.CLAUDE_SUMMARY_FIRE_URL;else process.env.CLAUDE_SUMMARY_FIRE_URL=oldUrl;
     if(oldKey===undefined)delete process.env.CLAUDE_SUMMARY_FIRE_TOKEN;else process.env.CLAUDE_SUMMARY_FIRE_TOKEN=oldKey;
+  }
+});
+
+test('only real provider refusals pause production dispatch',async()=>{
+  const names=['CLAUDE_SUMMARIES_ENABLED','CLAUDE_SUMMARY_FIRE_URL','CLAUDE_SUMMARY_FIRE_TOKEN'];
+  const previous=names.map(name=>process.env[name]);
+  process.env.CLAUDE_SUMMARIES_ENABLED='1';
+  process.env.CLAUDE_SUMMARY_FIRE_URL='https://api.anthropic.com/v1/claude_code/routines/trig_fixture/fire';
+  process.env.CLAUDE_SUMMARY_FIRE_TOKEN='fixture-provider-key';
+  try {
+    const queries=[];
+    const sql=async(strings)=>{
+      const query=strings.join('?');queries.push(query);
+      if(query.includes("error_code in ('provider_429'")) {
+        assert.match(query,/where not fixture and error_code/);
+        return [{id}];
+      }
+      throw Error('Paused dispatch must not read or write calls');
+    };
+    assert.deepEqual(await dispatchSummaries(sql),{status:'provider_cooldown',started:0});
+    assert.equal(queries.length,1);
+  } finally {
+    names.forEach((name,index)=>{if(previous[index]===undefined)delete process.env[name];else process.env[name]=previous[index];});
   }
 });
 
