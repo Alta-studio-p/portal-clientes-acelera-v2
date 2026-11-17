@@ -9,9 +9,14 @@ const sql=createSqlClient();
 try {
   const token=newJobToken();
   const classify=process.argv.includes('--classification');
-  const snapshot=classify?{input:{title:'Sesión ficticia',summary:'El cliente no se conectó a esta sesión. El coach esperó y terminó la reunión sin participantes externos.',transcript:'',duration_seconds:600,external_speakers:0,coach_is_caro:false}}:{title:'Prueba sintética',display_title:'Prueba sintética',summary:'Meeting Purpose\n\nReview a fictional CV and prepare for a fictional interview.\n\nKey Takeaways\n\n- Practice concise answers.\n- Use clear examples.',next_steps:'Next Steps\n\n- Prepare one example for the next practice session.'};
+  const followup=process.argv.includes('--followup');
+  const snapshot=followup?{input:{title:'Prueba ficticia de coaching',summary:'Se practicó una respuesta de entrevista y se acordó preparar dos ejemplos de liderazgo.',transcript_truncated:false,transcript:[
+    {ref:'T1',speaker:'coach',text:'Revisamos tu respuesta a la pregunta de liderazgo. Describiste la situación pero faltó explicar el resultado. ¿Qué resultado concreto lograste?'},
+    {ref:'T2',speaker:'client',text:'Logré que el proyecto se entregara dentro del plazo. Me comprometo a preparar dos ejemplos de liderazgo para nuestra próxima sesión.'},
+    {ref:'T3',speaker:'coach',text:'De acuerdo, revisaremos esos dos ejemplos y practicaremos cómo explicar el resultado. Antes de la próxima sesión puedes anotar situación, acción y resultado para cada uno.'},
+  ]}}:classify?{input:{title:'Sesión ficticia',summary:'El cliente no se conectó a esta sesión. El coach esperó y terminó la reunión sin participantes externos.',transcript:'',duration_seconds:600,external_speakers:0,coach_is_caro:false}}:{title:'Prueba sintética',display_title:'Prueba sintética',summary:'Meeting Purpose\n\nReview a fictional CV and prepare for a fictional interview.\n\nKey Takeaways\n\n- Practice concise answers.\n- Use clear examples.',next_steps:'Next Steps\n\n- Prepare one example for the next practice session.'};
   const [job]=await sql`insert into private.claude_summary_jobs(fixture,source_hash,snapshot,token_hash,expires_at,task)
-    values(true,${summaryHash(snapshot)},${JSON.stringify(snapshot)}::jsonb,${tokenHash(token)},now()+interval '1 hour',${classify?'classify_call':'translate_call'}) returning id::text`;
+    values(true,${summaryHash(snapshot)},${JSON.stringify(snapshot)}::jsonb,${tokenHash(token)},now()+interval '1 hour',${followup?'coach_followup':classify?'classify_call':'translate_call'}) returning id::text`;
   const response=await fetch(`${SUMMARY_ORIGIN}${SUMMARY_PATH}?job=${job.id}`,{method:'POST',redirect:'error',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({action:'start'}),signal:AbortSignal.timeout(60000)});
   if(!response.ok)throw Error(`Synthetic dispatch HTTP ${response.status}`);
   const started=await response.json();
@@ -19,7 +24,15 @@ try {
   if(started.status!=='started')throw Error('Synthetic routine did not start');
   for(let attempt=0;attempt<60;attempt++) {
     const [result]=await sql`select status,error_code,result from private.claude_summary_jobs where id=${job.id}::uuid`;
-    if(result.status==='success'){console.log(JSON.stringify({fixture:job.id,status:'success',keys:Object.keys(result.result),clientWrites:0}));process.exitCode=0;break;}
+    if(result.status==='success'){
+      console.log(JSON.stringify({fixture:job.id,status:'success',keys:Object.keys(result.result),clientWrites:0}));
+      if(followup&&process.argv.includes('--test-mail')){
+        const test=await fetch(`${SUMMARY_ORIGIN}${SUMMARY_PATH}?job=${job.id}`,{method:'POST',redirect:'error',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({action:'test-mail'}),signal:AbortSignal.timeout(60000)});
+        console.log(JSON.stringify({mailTest:test.ok?'accepted':'not_ready',recipient:'admin@joinaceleratalent.com'}));
+        if(!test.ok)throw Error('Google Workspace aún no permite enviar el correo de prueba.');
+      }
+      process.exitCode=0;break;
+    }
     if(['error','expired','obsolete'].includes(result.status))throw Error(`Synthetic routine ${result.status}: ${result.error_code||'unknown'}`);
     if(attempt===59)throw Error('Synthetic routine still pending; check Claude usage limits. No production call was changed.');
     await new Promise(resolve=>setTimeout(resolve,5000));

@@ -1,6 +1,8 @@
 import {getSql} from '@/lib/db';
 import {secretMatches} from '@/lib/claude-summary.mjs';
 import {authorizeSummaryJob,summaryPayload,dispatchSummaries,completeSummaryJob,startSummaryJob} from '@/lib/claude-summary-store.mjs';
+import {after} from 'next/server';
+import {deliverCoachFollowups,testWorkspaceMail} from '@/lib/coach-followup-mail.mjs';
 
 export const runtime='nodejs';
 export const maxDuration=120;
@@ -38,11 +40,16 @@ export async function POST(request:Request) {
     while(true){const {value,done}=await reader.read();if(done)break;size+=value.length;if(size>600000){await reader.cancel();return reply({error:'Body too large'},413);}chunks.push(value);}
     body=JSON.parse(Buffer.concat(chunks).toString('utf8'));
   } catch {return reply({error:'Invalid body'},400);}
+  if(body?.action==='test-mail'){
+    const check=await testWorkspaceMail(getSql(),job);
+    return reply(check.status===200?{ok:true}:{error:'Mail test unavailable'},check.status);
+  }
   if (body?.action==='start' && job.fixture && job.status==='pending') {
     try {return reply({ok:true,...await startSummaryJob(getSql(),id,{fixture:true})});} catch {return reply({error:'Dispatch unavailable'},503);}
   }
   try {
     const result=await completeSummaryJob(getSql(),id,authorization,body?.result);
+    if(result.status===200&&job.task==='coach_followup'&&!job.fixture)after(async()=>{try{await deliverCoachFollowups(getSql());}catch{/* Pending mail is retried by the scheduled dispatcher. */}});
     return reply(result.status===200?{ok:true}:{error:'Result rejected'},result.status);
   } catch {return reply({error:'Result unavailable'},503);}
 }

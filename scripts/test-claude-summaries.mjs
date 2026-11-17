@@ -118,6 +118,7 @@ test('only real provider refusals pause production dispatch',async()=>{
     const queries=[];
     const sql=async(strings)=>{
       const query=strings.join('?');queries.push(query);
+      if(query.includes('private.coach_followup_settings'))return [{enabled:false}];
       if(query.includes("error_code in ('provider_429'")) {
         assert.match(query,/where not fixture and error_code/);
         return [{id}];
@@ -125,7 +126,7 @@ test('only real provider refusals pause production dispatch',async()=>{
       throw Error('Paused dispatch must not read or write calls');
     };
     assert.deepEqual(await dispatchSummaries(sql),{status:'provider_cooldown',started:0});
-    assert.equal(queries.length,1);
+    assert.equal(queries.length,2);
   } finally {
     names.forEach((name,index)=>{if(previous[index]===undefined)delete process.env[name];else process.env[name]=previous[index];});
   }
