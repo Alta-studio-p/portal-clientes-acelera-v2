@@ -9,11 +9,13 @@ try{
   if(process.argv.includes('--register')){
     const sources=fathomSourcesFromEnv();
     if(!sources.length)throw Error('No hay fuentes de Fathom configuradas.');
+    let failures=0;
     for(const source of sources){
+      try{
       const [hook]=await sql`insert into private.fathom_followup_hooks(source_key) values(${source.key})
         on conflict(source_key) do update set source_key=excluded.source_key returning id,provider_id,active`;
       if(hook.provider_id){if(!hook.active)throw Error(`${source.key}: creación anterior sin confirmar. Revisa Fathom antes de reintentar.`);console.log(`${source.key}: webhook ya registrado`);continue;}
-      await sql`update private.fathom_followup_hooks set provider_id='registration_pending' where id=${hook.id}::uuid`;
+      await sql`update private.fathom_followup_hooks set provider_id=${`registration_pending:${hook.id}`} where id=${hook.id}::uuid`;
       const response=await fetch('https://api.fathom.ai/external/v1/webhooks',{
         method:'POST',redirect:'error',signal:AbortSignal.timeout(20000),headers:{'X-Api-Key':source.apiKey,'Content-Type':'application/json'},
         body:JSON.stringify({destination_url:`https://portal-clientes-acelera-v2.vercel.app/api/internal/fathom-followup?hook=${hook.id}`,
@@ -27,7 +29,9 @@ try{
       if(typeof created.id!=='string'||typeof created.secret!=='string'||!created.secret.startsWith('whsec_'))throw Error(`Fathom ${source.key}: respuesta no válida. Revisa el webhook antes de reintentar.`);
       await sql`update private.fathom_followup_hooks set provider_id=${created.id},signing_secret=${created.secret},active=true where id=${hook.id}::uuid`;
       console.log(`${source.key}: webhook registrado, secreto guardado sin mostrarlo`);
+      }catch(error){failures++;console.error(`${source.key}: ${error.message}`);}
     }
+    if(failures)throw Error(`${failures} fuente(s) requieren revisión. Las demás se conservaron.`);
   }
   if(process.argv.includes('--enable')){
     const [count]=await sql`select count(*)::int total from private.fathom_followup_hooks where active`;

@@ -25,6 +25,7 @@ try{
       ]};
     assert.equal((await receiveCoachFollowup(db,'alex','event',meeting)).accepted,true);
     assert.equal((await receiveCoachFollowup(db,'alex','event',meeting)).accepted,true);
+    assert.equal((await receiveCoachFollowup(db,'alex','other-recording',{...meeting,recording_id:456})).accepted,true);
     assert.equal((await db`select count(*)::int n from private.coach_followups`)[0].n,1);
     await enqueueCoachFollowups(db);await enqueueCoachFollowups(db);
     const [job]=await db`select * from private.claude_summary_jobs`;

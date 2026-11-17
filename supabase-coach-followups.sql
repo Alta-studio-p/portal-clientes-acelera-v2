@@ -18,6 +18,7 @@ create table if not exists private.fathom_followup_hooks (
 create table if not exists private.coach_followups (
   id uuid primary key default gen_random_uuid(),
   recording_id text unique not null,
+  dedupe_key text unique,
   source_key text not null,
   webhook_id text not null,
   client_id uuid references public.clients(id),
@@ -38,6 +39,7 @@ create table if not exists private.coach_followups (
   created_at timestamptz not null default now()
 );
 create index if not exists coach_followup_queue on private.coach_followups(status,created_at);
+alter table private.coach_followups add column if not exists dedupe_key text unique;
 alter table private.coach_followup_settings enable row level security;
 alter table private.fathom_followup_hooks enable row level security;
 alter table private.coach_followups enable row level security;

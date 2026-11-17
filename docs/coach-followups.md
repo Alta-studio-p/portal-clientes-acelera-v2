@@ -45,8 +45,10 @@ limpio, sin crítica privada, para revisar y compartir con el cliente.
 2. Desplegar código y ampliar la rutina para aceptar `coach_followup` según el
    esquema e instrucciones del endpoint existente.
 3. `scripts/check-claude-routine.mjs --start --followup`: prueba ficticia sin correo.
-4. Configurar el secreto de Workspace y verificar SMTP con un correo ficticio
-   dirigido únicamente al remitente aprobado.
+4. Configurar el secreto de Workspace y ejecutar la prueba con
+   `scripts/check-claude-routine.mjs --start --followup --test-mail`: verifica SMTP
+   con un correo ficticio dirigido únicamente al remitente aprobado. El token de
+   prueba se consume una sola vez; no permite enviar a un destinatario arbitrario.
 5. `scripts/setup-coach-followups.mjs --apply --register`: crea un webhook por
    fuente. Solo grabaciones propias, sin CRM. Guarda secretos solo en esquema privado.
 6. `scripts/setup-coach-followups.mjs --apply --enable`: habilita sesiones que
@@ -55,7 +57,8 @@ limpio, sin crítica privada, para revisar y compartir con el cliente.
 Los scripts necesitan `SUPABASE_DATABASE_URL` y, para registrar webhooks,
 `FATHOM_SOURCE_{COACH}_API_KEY`. Nunca imprimen credenciales.
 Si una creación de webhook queda sin confirmar, el script bloquea su repetición:
-revisar Fathom antes de resolver `registration_pending`.
+revisar Fathom antes de resolver `registration_pending`. Una API inválida de un
+coach no impide registrar las fuentes restantes.
 
 ## Entrega y recuperación
 

@@ -8,7 +8,7 @@ export const runtime='nodejs';
 export const maxDuration=120;
 export async function POST(request:Request) {
   const hook=new URL(request.url).searchParams.get('hook');
-  if(!/^[0-9a-f-]{36}$/i.test(hook??''))return Response.json({error:'Unauthorized'},{status:401});
+  if(!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(hook??''))return Response.json({error:'Unauthorized'},{status:401});
   const sql=getSql();
   const [config]=await sql`select source_key,signing_secret from private.fathom_followup_hooks where id=${hook}::uuid and active`;
   if(!config)return Response.json({error:'Unauthorized'},{status:401});

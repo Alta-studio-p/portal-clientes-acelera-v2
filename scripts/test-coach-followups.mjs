@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {createHmac} from 'node:crypto';
 import {verifyFathomSignature,followupInput,validateFollowup,followupMessage} from '../lib/coach-followup.mjs';
 import {receiveCoachFollowup,completeCoachFollowup,enqueueCoachFollowups} from '../lib/coach-followup-store.mjs';
-import {deliverCoachFollowups,workspaceTransport,WORKSPACE_SENDER} from '../lib/coach-followup-mail.mjs';
+import {deliverCoachFollowups,workspaceTransport,WORKSPACE_SENDER,coachMailbox} from '../lib/coach-followup-mail.mjs';
 
 const secret='whsec_'+Buffer.from('fixture-secret-never-production').toString('base64');
 const stamp=String(Math.floor(Date.now()/1000)),raw='{"recording_id":123}',id='fixture-event';
@@ -39,6 +39,9 @@ const message=followupMessage(result,{clientName:client.full_name,startedAt:meet
 assert(message.text.includes('PRIVADO PARA EL COACH'));assert(!message.clientText.includes(result.coach_feedback[0].observation));
 assert(message.clientText.includes('Podríamos'));assert(message.clientText.includes('Tú: Preparar'));
 assert.throws(()=>workspaceTransport('normal-password'));
+assert.equal(coachMailbox('a,b@example.test'),null);
+assert.equal(coachMailbox('a@example.test\r\nBcc: another@example.test'),null);
+assert.equal(coachMailbox('Coach@Example.test'),'coach@example.test');
 
 function db(handler){const writes=[];const sql=async(strings,...values)=>{const q=strings.join('?');if(/^(insert|update)/.test(q.trim()))writes.push({q,values});return handler(q,values);};sql.transaction=fn=>fn(sql);return {sql,writes};}
 let duplicate=false;
