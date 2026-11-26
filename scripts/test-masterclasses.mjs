@@ -83,3 +83,15 @@ test('relative dates and the "new" badge', () => {
   assert.equal(isNewMasterclass('2026-10-30T16:00:00Z', now), false);
   assert.equal(isNewMasterclass(null, now), false);
 });
+
+test('calendar helpers use Colombia time and Monday-first month grids', async () => {
+  const { masterclassDayKey, formatMasterclassTime, masterclassMonthGrid } = await import('../lib/masterclasses.mjs');
+  // 00:30 UTC del día 27 sigue siendo 26 en Colombia (UTC-5).
+  assert.equal(masterclassDayKey('2026-11-27T00:30:00Z'), '2026-11-26');
+  assert.match(formatMasterclassTime('2026-11-27T00:30:00Z'), /^7:30\s?p\.\s?m\.$/);
+  const nov = masterclassMonthGrid(2026, 11); // 1 nov 2026 es domingo
+  assert.equal(nov.length % 7, 0);
+  assert.equal(nov.indexOf('2026-11-01'), 6);
+  assert.equal(nov.filter(Boolean).length, 30);
+  assert.equal(masterclassMonthGrid(2026, 2).filter(Boolean).length, 28);
+});

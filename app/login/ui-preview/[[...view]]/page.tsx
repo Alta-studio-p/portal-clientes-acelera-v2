@@ -56,6 +56,17 @@ export default async function UiPreview({ params, searchParams }: {
     resources: index===3 ? [{title:'Plantilla de CV', url:'https://docs.google.com/document/d/example'}] : [],
     category: (['ai','ai','executive_lab','guides','ai'] as const)[index],
   }));
+  const live: Masterclass[] = [
+    {t:'Executive Lab: negociación salarial',d:'2026-11-28T00:00:00Z',c:'executive_lab',s:'scheduled'},
+    {t:'Agentes de IA para tu búsqueda de empleo',d:'2026-12-03T00:00:00Z',c:'ai',s:'scheduled'},
+    {t:'Executive Lab: liderazgo y presencia',d:'2026-12-10T00:00:00Z',c:'executive_lab',s:'scheduled'},
+    {t:'Clase de LinkedIn (reprogramada)',d:'2026-12-10T22:00:00Z',c:'ai',s:'cancelled'},
+  ].map((x, index) => ({
+    id: `live-${index}`, title: x.t, description: '', starts_at: x.d, previous_starts_at: null, duration_minutes: 60,
+    status: x.s as 'scheduled' | 'cancelled', live_url: x.s==='scheduled' ? 'https://meet.google.com/abc-defg-hij' : null, drive_url: null,
+    category: x.c as 'ai' | 'executive_lab',
+  }));
+  classes.push(...live);
   const coaching:CoachingBundle={available:true,sourceHash:'demo',summaryCount:4,totalCalls:4,topics:[],recommendations:[],versions:[{
     id:'demo-insight',source_hash:'demo',model:'google/gemini-2.5-flash-lite',created_at:'2026-11-10T15:00:00Z',truncated:false,cost_usd:null,
     source_call_ids:['call-3','call-2','call-1','call-0'],analysis:{
