@@ -6,6 +6,7 @@ import {
   masterclassDriveUrl,
   masterclassDrivePreview,
   masterclassFathomUrl,
+  masterclassHttpsUrl,
   masterclassLiveUrl,
   masterclassResources,
   masterclassStatuses,
@@ -76,6 +77,11 @@ export function MasterclassDetail({ item, backHref, editHref, notice }: {
         Ver en Fathom <ArrowUpRight size={14} aria-hidden="true" />
       </a>}
     </section>}
+
+    {item.cover_url && item.cover_credit_name && item.cover_credit_url && masterclassHttpsUrl(item.cover_credit_url) && <p className="-mt-4 mb-8 text-xs text-muted">
+      Foto de <a href={masterclassHttpsUrl(item.cover_credit_url)!} target="_blank" rel="noreferrer" className="underline hover:text-foreground">{item.cover_credit_name}</a> en{" "}
+      <a href="https://unsplash.com/?utm_source=portal_acelera&utm_medium=referral" target="_blank" rel="noreferrer" className="underline hover:text-foreground">Unsplash</a>
+    </p>}
 
     {item.description && <section aria-labelledby="about-title" className="mb-8">
       <h2 id="about-title" className="mb-2 text-base font-semibold">Sobre esta clase</h2>

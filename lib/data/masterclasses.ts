@@ -20,6 +20,8 @@ export type Masterclass = {
   drive_url: string | null;
   fathom_url?: string | null;
   cover_url?: string | null;
+  cover_credit_name?: string | null;
+  cover_credit_url?: string | null;
   resources?: unknown;
   category?: MasterclassCategory;
   source_call_id?: string | null;
@@ -39,7 +41,7 @@ function select(admin: boolean, id: string | null) {
       case when ${admin} or status = 'recording' then drive_url end as drive_url,
       case when ${admin} or status = 'recording' then fathom_url end as fathom_url,
       case when ${admin} or status = 'recording' then resources else '[]'::jsonb end as resources,
-      cover_url, category, source_call_id::text
+      cover_url, cover_credit_name, cover_credit_url, category, source_call_id::text
     from public.masterclasses
     where (${id}::uuid is null or id = ${id}::uuid) and (${admin}
       or (status = 'recording' and coalesce(starts_at, published_at) <= now())

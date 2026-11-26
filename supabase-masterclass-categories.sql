@@ -6,6 +6,9 @@
 alter table public.masterclasses add column if not exists published_at timestamptz;
 alter table public.masterclasses add column if not exists cover_url text;
 alter table public.masterclasses add column if not exists resources jsonb not null default '[]'::jsonb;
+-- Crédito de la foto de portada (Unsplash exige nombre del fotógrafo y enlace a su perfil).
+alter table public.masterclasses add column if not exists cover_credit_name text;
+alter table public.masterclasses add column if not exists cover_credit_url text;
 
 -- Quita los checks viejos de categoría y de duración (nombres autogenerados por Postgres).
 do $$

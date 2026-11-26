@@ -27,7 +27,10 @@ export async function saveMasterclass(id: string | null, _state: string, form: F
           previous_starts_at = case when status in ('scheduled', 'cancelled') and starts_at <> ${startsAt}::timestamptz
             then starts_at else previous_starts_at end,
           starts_at = ${startsAt}, duration_minutes = ${duration}, live_url = ${live}, drive_url = ${drive},
-          fathom_url = ${fathom}, category = ${category}, cover_url = ${cover}, resources = ${resourcesJson}::jsonb,
+          fathom_url = ${fathom}, category = ${category},
+          cover_credit_name = case when cover_url is distinct from ${cover} then null else cover_credit_name end,
+          cover_credit_url = case when cover_url is distinct from ${cover} then null else cover_credit_url end,
+          cover_url = ${cover}, resources = ${resourcesJson}::jsonb,
           published_at = case when ${status}::text = 'recording' then coalesce(published_at, now()) else published_at end
         where id = ${id}::uuid returning id
       `;
