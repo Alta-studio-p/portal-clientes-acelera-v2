@@ -3,6 +3,7 @@ import { listMasterclasses } from '@/lib/data/masterclasses';
 import { MasterclassesView } from '@/components/masterclasses-view';
 
 export default async function ClientMasterclassesPreview({params}:{params:Promise<{id:string}>}){
-  await getPreviewClient((await params).id);
-  return <MasterclassesView classes={await listMasterclasses()}/>;
+  const {id}=await params;
+  await getPreviewClient(id);
+  return <MasterclassesView classes={await listMasterclasses()} basePath={`/preview/clients/${id}/masterclasses`}/>;
 }

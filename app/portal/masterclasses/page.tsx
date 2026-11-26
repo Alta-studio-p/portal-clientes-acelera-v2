@@ -4,5 +4,5 @@ import { listMasterclasses } from "@/lib/data/masterclasses";
 
 export default async function MasterclassesPage() {
   await requireRole(["client"]);
-  return <MasterclassesView classes={await listMasterclasses()} />;
+  return <MasterclassesView classes={await listMasterclasses()} basePath="/portal/masterclasses" />;
 }

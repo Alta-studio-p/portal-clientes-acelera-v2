@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { masterclassDrivePreview, masterclassDriveUrl, masterclassLiveUrl, masterclassLocalInput, parseMasterclass } from '../lib/masterclasses.mjs';
+import { formatMasterclassRelative, isNewMasterclass, masterclassCategory, masterclassDrivePreview, masterclassDriveUrl, masterclassLiveUrl, masterclassLocalInput, masterclassResources, parseMasterclass } from '../lib/masterclasses.mjs';
 
 const now = Date.parse('2026-11-06T17:00:00Z');
 const meet = 'https://meet.google.com/abc-defg-hij';
@@ -10,6 +10,7 @@ function read(overrides = {}) {
   const form = new FormData();
   for (const [key, value] of Object.entries({
     title: 'Clase de IA',
+    category: 'ai',
     starts_at: '2026-11-07T19:00',
     duration_minutes: '60',
     status: 'scheduled',
@@ -49,4 +50,36 @@ test('links reject lookalike hosts, redirects and non-HTTPS URLs', () => {
   assert.equal(masterclassLiveUrl('https://meet.google.com/redirect?to=https://evil.test'), null);
   assert.equal(masterclassLiveUrl('http://meet.google.com/abc-defg-hij'), null);
   assert.equal(masterclassLiveUrl('https://meet.google.com@evil.test/abc-defg-hij'), null);
+});
+
+test('category is required and limited to the three library sections', () => {
+  assert.throws(() => read({ category: '' }), /categoría/);
+  assert.throws(() => read({ category: 'caro' }), /categoría/);
+  assert.equal(read({ category: 'executive_lab' }).category, 'executive_lab');
+  assert.equal(masterclassCategory('caro'), 'ai');
+  assert.equal(masterclassCategory(null), 'ai');
+});
+
+test('guides may skip the live date and publish with materials only', () => {
+  const guide = read({ category: 'guides', status: 'recording', starts_at: '', duration_minutes: '', live_url: '', resources: 'Plantilla | https://docs.google.com/document/d/x\nhttps://example.com/guia.pdf' });
+  assert.equal(guide.startsAt, null);
+  assert.equal(guide.duration, null);
+  assert.deepEqual(guide.resources, [
+    { title: 'Plantilla', url: 'https://docs.google.com/document/d/x' },
+    { title: 'example.com', url: 'https://example.com/guia.pdf' },
+  ]);
+  assert.throws(() => read({ category: 'guides', status: 'recording', starts_at: '', live_url: '' }), /material/);
+  assert.throws(() => read({ category: 'guides', status: 'scheduled' }), /guías/);
+  assert.throws(() => read({ category: 'ai', starts_at: '' }), /fecha/);
+  assert.throws(() => read({ resources: 'Mal | http://example.com' }), /https/);
+  assert.deepEqual(masterclassResources([{ title: 'x', url: 'javascript:alert(1)' }, 'nope']), []);
+});
+
+test('relative dates and the "new" badge', () => {
+  assert.equal(formatMasterclassRelative('2026-11-06T12:00:00Z', now), 'hoy');
+  assert.equal(formatMasterclassRelative('2026-11-03T16:00:00Z', now), 'hace 3 días');
+  assert.match(formatMasterclassRelative('2026-10-23T16:00:00Z', now), /^23 oct 2026$/);
+  assert.equal(isNewMasterclass('2026-11-01T17:00:00Z', now), true);
+  assert.equal(isNewMasterclass('2026-10-30T16:00:00Z', now), false);
+  assert.equal(isNewMasterclass(null, now), false);
 });

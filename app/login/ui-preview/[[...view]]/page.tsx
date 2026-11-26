@@ -5,6 +5,7 @@ import { AppShell } from '@/components/app-shell';
 import { ClientProgressDashboard } from '@/components/client-progress-dashboard';
 import { ClientDetailView } from '@/components/client-detail-view';
 import { MasterclassesView } from '@/components/masterclasses-view';
+import { MasterclassDetail } from '@/components/masterclass-detail';
 import type { ClientDetail } from '@/lib/data/client-detail';
 import type { ProgressClient } from '@/lib/client-progress';
 import type { Masterclass } from '@/lib/data/masterclasses';
@@ -47,10 +48,13 @@ export default async function UiPreview({ params, searchParams }: {
       recording_url: null, share_url: null, calendar_event_id: null, raw_metadata: null, participants: [],
     })),
   };
-  const classes: Masterclass[] = ['Contenido para LinkedIn con IA', 'Agentes de inteligencia artificial', 'Entrevistas y narrativa profesional'].map((title, index) => ({
+  const classes: Masterclass[] = (['Crea páginas web con Claude', 'Agentes de inteligencia artificial', 'Liderazgo y negociación salarial', 'Plantilla de CV para roles ejecutivos', 'Contenido para LinkedIn con IA'] as const).map((title, index) => ({
     id: `class-${index}`, title, description: 'Masterclase de prueba para revisar el diseño de la biblioteca.',
-    starts_at: `2026-10-0${3-index}T15:00:00Z`, previous_starts_at: null, duration_minutes: 60,
-    status: 'recording', live_url: null, drive_url: null, category: index===2?'caro':'ai',
+    starts_at: index===3 ? null : `2026-1${index<2?1:0}-${String(24-index*5).padStart(2,'0')}T15:00:00Z`, previous_starts_at: null,
+    published_at: `2026-1${index<2?1:0}-${String(24-index*5).padStart(2,'0')}T18:00:00Z`, duration_minutes: index===3 ? null : 60,
+    status: 'recording', live_url: null, drive_url: null, fathom_url: index===0 ? 'https://fathom.video/share/example' : null,
+    resources: index===3 ? [{title:'Plantilla de CV', url:'https://docs.google.com/document/d/example'}] : [],
+    category: (['ai','ai','executive_lab','guides','ai'] as const)[index],
   }));
   const coaching:CoachingBundle={available:true,sourceHash:'demo',summaryCount:4,totalCalls:4,topics:[],recommendations:[],versions:[{
     id:'demo-insight',source_hash:'demo',model:'google/gemini-2.5-flash-lite',created_at:'2026-11-10T15:00:00Z',truncated:false,cost_usd:null,
@@ -71,6 +75,6 @@ export default async function UiPreview({ params, searchParams }: {
     {href: `${base}/progress`, label: 'Progreso'}, {href: `${base}/journey`, label: 'Mapa del proceso'}, {href: `${base}/attention`, label: 'Revisar llamadas'}, {href: `${base}/client`, label: 'Mi progreso'}, {href: `${base}/masterclasses`, label: 'Masterclases'},
   ]}>
     <p className="mb-6 text-xs text-muted">Vista de diseño con datos ficticios. <Link href="/login" className="text-accent underline">Ir al acceso real</Link></p>
-    {view==='attention'?<CallAssignmentQueue role="admin" calls={client.calls.slice(0,3).map(call=>({...call,client_id:null,coach_name:'Alex'}))} clients={clients.map(item=>({id:item.id,name:item.name,email:item.email}))} discardedCalls={[{...client.calls[3],client_id:null,coach_name:'Alex',discarded_at:'2026-11-17T12:00:00Z',discard_reason:'no_show'}]}/>:view==='journey'||view==='client-map'?<><ClientHeader client={client} clientFacing={clientView} showProgramStatus={!clientView}/>{clientView&&clientNav}<CoachingInsightsPanel clientId={client.id} bundle={coaching} calls={client.calls.map(call=>({id:call.id,title:call.title??'',date:call.started_at}))} basePath={`${base}/client`} readOnly/></>:view === 'client' || view === 'clients' ? <ClientDetailView client={client} callHrefBase={`${base}/${path.join('/')}`} selectedCallId={(await searchParams).call} showProgramStatus={false} clientFacing={clientView} navigation={clientView?clientNav:undefined} /> : view === 'masterclasses' ? <MasterclassesView classes={classes} /> : <Suspense><ClientProgressDashboard clients={clients} categories={[{id:'paid',label:'Pagado',active:true},{id:'pending',label:'Pendiente de pago',active:true},{id:'work',label:'Consiguió trabajo',active:true}]} coaches={[{id:'demo-coach',name:'Alex',isSupport:false}]} isAdmin readOnly today="2026-11-08" basePath={base} /></Suspense>}
+    {view==='attention'?<CallAssignmentQueue role="admin" calls={client.calls.slice(0,3).map(call=>({...call,client_id:null,coach_name:'Alex'}))} clients={clients.map(item=>({id:item.id,name:item.name,email:item.email}))} discardedCalls={[{...client.calls[3],client_id:null,coach_name:'Alex',discarded_at:'2026-11-17T12:00:00Z',discard_reason:'no_show'}]}/>:view==='journey'||view==='client-map'?<><ClientHeader client={client} clientFacing={clientView} showProgramStatus={!clientView}/>{clientView&&clientNav}<CoachingInsightsPanel clientId={client.id} bundle={coaching} calls={client.calls.map(call=>({id:call.id,title:call.title??'',date:call.started_at}))} basePath={`${base}/client`} readOnly/></>:view === 'client' || view === 'clients' ? <ClientDetailView client={client} callHrefBase={`${base}/${path.join('/')}`} selectedCallId={(await searchParams).call} showProgramStatus={false} clientFacing={clientView} navigation={clientView?clientNav:undefined} /> : view === 'masterclasses' ? (path[1] ? (()=>{const item=classes.find(c=>c.id===path[1]);if(!item)notFound();return <MasterclassDetail item={item} backHref={`${base}/masterclasses`}/>;})() : <MasterclassesView classes={classes} basePath={`${base}/masterclasses`} />) : <Suspense><ClientProgressDashboard clients={clients} categories={[{id:'paid',label:'Pagado',active:true},{id:'pending',label:'Pendiente de pago',active:true},{id:'work',label:'Consiguió trabajo',active:true}]} coaches={[{id:'demo-coach',name:'Alex',isSupport:false}]} isAdmin readOnly today="2026-11-08" basePath={base} /></Suspense>}
   </AppShell>;
 }

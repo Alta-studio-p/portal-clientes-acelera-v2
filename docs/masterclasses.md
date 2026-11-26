@@ -7,3 +7,11 @@
 Drive access is independent of the portal. Prefer restricted sharing with a verified clients-only group when possible. The current Acelera recordings folder uses approved link sharing as Viewer for playback without a Google account. Never apply that permission to folders containing individual client files.
 
 Run `node --test scripts/test-masterclasses.mjs` to verify date and link validation.
+
+## Categorías y biblioteca
+
+Las masterclases se agrupan en **Inteligencia artificial**, **Executive Lab** y **Guías** (`masterclasses.category`: `ai`, `executive_lab`, `guides`). Antes de desplegar este cambio corre `node --env-file=.env.local scripts/setup-masterclass-categories.mjs` (dry-run, muestra cuántas filas cambian) y luego con `--apply`. La migración (`supabase-masterclass-categories.sql`) pasa las clases existentes, incluidas las antiguas "Clases de Caro", a Inteligencia artificial y agrega `published_at`, `cover_url` y `resources`.
+
+- Las guías pueden publicarse sin fecha en vivo ni duración; se muestra la fecha de publicación (`published_at`, que se fija la primera vez que una clase pasa a publicada). Solo pueden estar en borrador o publicadas, y se pueden publicar con solo materiales.
+- Cada clase tiene página de detalle en `/admin/masterclasses/[id]`, `/portal/masterclasses/[id]` y `/preview/clients/[id]/masterclasses/[classId]`.
+- Las clases detectadas por IA desde llamadas de Caro se crean como borrador en Inteligencia artificial: elige la categoría correcta al revisarlas.

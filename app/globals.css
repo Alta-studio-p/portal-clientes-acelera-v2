@@ -37,6 +37,15 @@
   --chart-4: #1baf7a;
   --chart-5: #eda100;
   --chart-6: #e34948;
+
+  /* Categorías de masterclases: etiqueta sutil + portada de respaldo.
+     IA usa el verde de marca; las otras dos son tonos apagados que no chocan con estados. */
+  --cat-ai: var(--accent);
+  --cat-ai-bg: var(--accent-soft);
+  --cat-exec: #3f4f8f;
+  --cat-exec-bg: #eaedf7;
+  --cat-guides: #7a4a73;
+  --cat-guides-bg: #f4ebf3;
 }
 
 @theme inline {
@@ -50,6 +59,12 @@
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
   --color-accent-soft: var(--accent-soft);
+  --color-cat-ai: var(--cat-ai);
+  --color-cat-ai-bg: var(--cat-ai-bg);
+  --color-cat-exec: var(--cat-exec);
+  --color-cat-exec-bg: var(--cat-exec-bg);
+  --color-cat-guides: var(--cat-guides);
+  --color-cat-guides-bg: var(--cat-guides-bg);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
